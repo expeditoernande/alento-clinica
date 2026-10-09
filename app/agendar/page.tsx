@@ -15,12 +15,19 @@ export const metadata: Metadata = {
 export default async function AgendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ psi?: string }>;
+  searchParams: Promise<{ psi?: string; date?: string; time?: string }>;
 }) {
-  const user = await currentUser();
-  if (!user) redirect("/entrar?next=/agendar");
+  const { psi, date, time } = await searchParams;
 
-  const { psi } = await searchParams;
+  const user = await currentUser();
+  if (!user) {
+    const query = new URLSearchParams();
+    if (psi) query.set("psi", psi);
+    if (date) query.set("date", date);
+    if (time) query.set("time", time);
+    const suffix = query.toString();
+    redirect(`/entrar?next=${encodeURIComponent(`/agendar${suffix ? `?${suffix}` : ""}`)}`);
+  }
 
   const entries = await Promise.all(
     psychologists.map(async (person) => [person.slug, await takenSlots(person.slug)] as const),
@@ -44,7 +51,7 @@ export default async function AgendarPage({
 
       <section className="section pt-12 md:pt-14">
         <div className="shell">
-          <BookingForm initialSlug={psi} taken={taken} />
+          <BookingForm initialSlug={psi} initialDate={date} initialTime={time} taken={taken} />
         </div>
       </section>
     </PublicShell>

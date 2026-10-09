@@ -3,28 +3,18 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { approaches, psychologists } from "@/lib/site";
+import { approaches, psychologists, SESSION_SLOTS } from "@/lib/site";
 import type { FieldErrors } from "@/lib/validation";
-
-const SLOTS = [
-  "08:00",
-  "09:00",
-  "10:00",
-  "11:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-  "18:00",
-  "19:00",
-  "20:00",
-];
 
 function today() {
   const now = new Date();
   const offset = now.getTimezoneOffset() * 60_000;
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function validDate(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  return value >= today() ? value : null;
 }
 
 function approachName(slug: string) {
@@ -33,9 +23,13 @@ function approachName(slug: string) {
 
 export function BookingForm({
   initialSlug,
+  initialDate,
+  initialTime,
   taken,
 }: {
   initialSlug?: string;
+  initialDate?: string;
+  initialTime?: string;
   taken: Record<string, string[]>;
 }) {
   const router = useRouter();
@@ -46,8 +40,10 @@ export function BookingForm({
   );
   const person = psychologists.find((item) => item.slug === slug)!;
 
-  const [date, setDate] = useState(today());
-  const [time, setTime] = useState("");
+  const [date, setDate] = useState(validDate(initialDate) ?? today());
+  const [time, setTime] = useState(
+    initialTime && SESSION_SLOTS.includes(initialTime) ? initialTime : "",
+  );
   const [mode, setMode] = useState<"online" | "presencial">(
     person.online ? "online" : "presencial",
   );
@@ -218,7 +214,7 @@ export function BookingForm({
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {SLOTS.map((slot) => {
+            {SESSION_SLOTS.map((slot) => {
               const busy = takenSet.has(`${date} ${slot}`);
               const active = time === slot;
               return (

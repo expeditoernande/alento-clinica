@@ -243,3 +243,18 @@ export const faqs: Faq[] = [
 ];
 
 export const sessionPrices = { min: 170, max: 220 };
+
+export const SESSION_SLOTS = [
+  "08:00",
+  "09:00",
+  "10:00",
+  "11:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+  "18:00",
+  "19:00",
+  "20:00",
+];
