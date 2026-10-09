@@ -43,3 +43,6 @@ next-env.d.ts
 
 # armazenamento local no dev
 .alento-data.json
+
+.vercel
+.env*

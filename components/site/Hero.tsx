@@ -100,11 +100,6 @@ export function Hero() {
                 </div>
               </div>
             </div>
-
-            <div className="absolute -bottom-5 -left-5 hidden rounded-2xl border border-line bg-paper px-4 py-3 shadow-[0_18px_44px_-30px_rgba(28,29,27,0.5)] sm:block">
-              <p className="text-[11px] text-stone">Sessão confirmada</p>
-              <p className="text-[13px] text-sage">Quinta, 16:30 · Online</p>
-            </div>
           </div>
         </Reveal>
       </div>
