@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/site/Logo";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { nav } from "@/lib/site";
 import type { PublicUser } from "@/lib/types";
 
@@ -41,6 +42,7 @@ export function Nav({ user }: { user: PublicUser | null }) {
         </nav>
 
         <div className="hidden items-center gap-2.5 lg:flex">
+          <ThemeToggle />
           {user ? (
             <>
               <Link href="/agendar" className="btn btn-outline !px-5 !py-2.5 !text-[12px]">
@@ -65,43 +67,49 @@ export function Nav({ user }: { user: PublicUser | null }) {
           )}
         </div>
 
-        <button
-          type="button"
-          className="grid h-10 w-10 place-items-center rounded-full border border-line lg:hidden"
-          aria-expanded={open}
-          aria-controls="menu-mobile"
-          aria-label={open ? "Fechar menu" : "Abrir menu"}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            {open ? (
-              <path
-                d="M4 4l10 10M14 4L4 14"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-              />
-            ) : (
-              <path
-                d="M2.5 5h13M2.5 9h13M2.5 13h13"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-              />
-            )}
-          </svg>
-        </button>
+        <div className="flex items-center gap-2 lg:hidden">
+          <ThemeToggle />
+          <button
+            type="button"
+            className="grid h-10 w-10 place-items-center rounded-full border border-line"
+            aria-expanded={open}
+            aria-controls="menu-mobile"
+            aria-label={open ? "Fechar menu" : "Abrir menu"}
+            onClick={() => setOpen((value) => !value)}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              {open ? (
+                <path
+                  d="M4 4l10 10M14 4L4 14"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              ) : (
+                <path
+                  d="M2.5 5h13M2.5 9h13M2.5 13h13"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              )}
+            </svg>
+          </button>
+        </div>
       </div>
 
       {open && (
-        <div id="menu-mobile" className="border-t border-line bg-paper lg:hidden">
+        <div
+          id="menu-mobile"
+          className="border-t border-line bg-paper transition-all duration-200 lg:hidden animate-in fade-in slide-in-from-top-1"
+        >
           <div className="shell flex flex-col gap-1 py-4">
             {nav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={close}
-                className="rounded-xl px-3 py-3 text-[15px] text-graphite hover:bg-mist hover:text-ink"
+                className="rounded-xl px-3 py-3 text-[15px] text-graphite transition-colors hover:bg-mist hover:text-ink"
               >
                 {item.label}
               </Link>
