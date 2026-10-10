@@ -41,3 +41,10 @@ export type StoredApplication = {
 };
 
 export type StorageKind = "postgres" | "arquivo local" | "memória";
+
+export type AdminUser = PublicUser & { createdAt: string };
+
+export type AdminAppointment = StoredAppointment & {
+  patientName: string;
+  patientEmail: string;
+};

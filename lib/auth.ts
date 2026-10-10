@@ -108,3 +108,16 @@ export async function userById(id: string): Promise<PublicUser | null> {
   const user = await findUserById(id);
   return user ? toPublic(user) : null;
 }
+
+/** E-mails com acesso administrativo, definidos em ADMIN_EMAILS (separados por vírgula). */
+export function adminEmails(): string[] {
+  return (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isAdmin(user: PublicUser | null | undefined): boolean {
+  if (!user) return false;
+  return adminEmails().includes(user.email.toLowerCase());
+}

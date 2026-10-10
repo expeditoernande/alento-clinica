@@ -1,5 +1,7 @@
 import { Pool } from "pg";
 import type {
+  AdminAppointment,
+  AdminUser,
   StoredApplication,
   StoredAppointment,
   StoredUser,
@@ -513,6 +515,17 @@ export async function countApplications(): Promise<number> {
   return data.applications.length;
 }
 
+export async function countAppointments(): Promise<number> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query("SELECT count(*)::int AS total FROM al_appointments");
+    return Number((result.rows[0] as { total: number }).total);
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? 0;
+
+  const data = await readLocal();
+  return data.appointments.length;
+}
+
 export async function countUsers(): Promise<number> {
   const viaPg = await withClient(async (client) => {
     const result = await client.query("SELECT count(*)::int AS total FROM al_users");
@@ -522,6 +535,106 @@ export async function countUsers(): Promise<number> {
 
   const data = await readLocal();
   return data.users.length;
+}
+
+/* ------------------------------ administração ------------------------------ */
+
+export async function listAllUsers(limit = 100): Promise<AdminUser[]> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      `SELECT id, name, email, phone, created_at FROM al_users
+       ORDER BY created_at DESC LIMIT $1`,
+      [limit],
+    );
+    return result.rows.map(
+      (row) =>
+        ({
+          id: row.id as string,
+          name: row.name as string,
+          email: row.email as string,
+          phone: row.phone as string,
+          createdAt: new Date(row.created_at as string).toISOString(),
+        }) satisfies AdminUser,
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? [];
+
+  const data = await readLocal();
+  return data.users
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, limit)
+    .map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone ?? "",
+      createdAt: user.createdAt,
+    }));
+}
+
+export async function listRecentAppointments(limit = 50): Promise<AdminAppointment[]> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      `SELECT a.id, a.code, a.user_id, a.psychologist_slug, a.date, a.time, a.mode,
+              a.notes, a.status, a.created_at, u.name AS patient_name, u.email AS patient_email
+       FROM al_appointments a
+       JOIN al_users u ON u.id = a.user_id
+       ORDER BY a.created_at DESC LIMIT $1`,
+      [limit],
+    );
+    return result.rows.map(
+      (row) =>
+        ({
+          ...mapAppointment(row as AppointmentRow),
+          patientName: row.patient_name as string,
+          patientEmail: row.patient_email as string,
+        }) satisfies AdminAppointment,
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? [];
+
+  const data = await readLocal();
+  const users = new Map(data.users.map((user) => [user.id, user]));
+  return data.appointments
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, limit)
+    .map((item) => {
+      const patient = users.get(item.userId);
+      return {
+        ...item,
+        patientName: patient?.name ?? "—",
+        patientEmail: patient?.email ?? "—",
+      };
+    });
+}
+
+export async function listApplications(limit = 50): Promise<StoredApplication[]> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      `SELECT id, name, email, phone, crp, approach, message, created_at
+       FROM al_applications ORDER BY created_at DESC LIMIT $1`,
+      [limit],
+    );
+    return result.rows.map(
+      (row) =>
+        ({
+          id: row.id as string,
+          name: row.name as string,
+          email: row.email as string,
+          phone: row.phone as string,
+          crp: row.crp as string,
+          approach: row.approach as string,
+          message: row.message as string,
+          createdAt: new Date(row.created_at as string).toISOString(),
+        }) satisfies StoredApplication,
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? [];
+
+  const data = await readLocal();
+  return data.applications.slice(0, limit);
 }
 
 /* ------------------------------ diagnóstico ------------------------------ */

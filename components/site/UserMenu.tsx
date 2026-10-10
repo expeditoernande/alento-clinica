@@ -8,7 +8,7 @@ import type { PublicUser } from "@/lib/types";
 const itemClass =
   "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] text-graphite transition-colors hover:bg-mist hover:text-ink";
 
-export function UserMenu({ user }: { user: PublicUser }) {
+export function UserMenu({ user, isAdmin = false }: { user: PublicUser; isAdmin?: boolean }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const firstName = user.name.trim().split(/\s+/)[0] || user.name;
@@ -70,6 +70,11 @@ export function UserMenu({ user }: { user: PublicUser }) {
           <Link href="/agendar" role="menuitem" className={itemClass}>
             Agendar consulta
           </Link>
+          {isAdmin && (
+            <Link href="/admin" role="menuitem" className={itemClass}>
+              Administração
+            </Link>
+          )}
           <button
             type="button"
             role="menuitem"

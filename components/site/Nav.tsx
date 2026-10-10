@@ -8,7 +8,7 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { nav } from "@/lib/site";
 import type { PublicUser } from "@/lib/types";
 
-export function Nav({ user }: { user: PublicUser | null }) {
+export function Nav({ user, isAdmin = false }: { user: PublicUser | null; isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -57,7 +57,7 @@ export function Nav({ user }: { user: PublicUser | null }) {
               <Link href="/agendar" className="btn btn-outline !px-5 !py-2.5 !text-[12px]">
                 Agendar
               </Link>
-              <UserMenu user={user} />
+              <UserMenu user={user} isAdmin={isAdmin} />
             </>
           ) : (
             <>
@@ -128,6 +128,11 @@ export function Nav({ user }: { user: PublicUser | null }) {
                   <Link href="/minha-conta" onClick={close} className="btn btn-primary">
                     Minha conta
                   </Link>
+                  {isAdmin && (
+                    <Link href="/admin" onClick={close} className="btn btn-outline">
+                      Administração
+                    </Link>
+                  )}
                 </>
               ) : (
                 <>
