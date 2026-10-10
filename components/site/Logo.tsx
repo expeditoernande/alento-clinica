@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
 
 export function Logo({ className = "" }: { className?: string }) {
   return (
     <Link
       href="/"
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
       className={`group inline-flex items-center gap-2.5 ${className}`}
       aria-label="ALENTO — clínica de psicologia, ir para o início"
     >

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import { RevealRuntime } from "@/components/ui/RevealRuntime";
+import { ScrollReset } from "@/components/ui/ScrollReset";
 import "./globals.css";
 
 const inter = Inter({
@@ -57,9 +58,14 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${fraunces.variable}`}>
+    <html
+      lang="pt-BR"
+      data-scroll-behavior="smooth"
+      className={`${inter.variable} ${fraunces.variable}`}
+    >
       <body>
         <RevealRuntime />
+        <ScrollReset />
         {children}
       </body>
     </html>
