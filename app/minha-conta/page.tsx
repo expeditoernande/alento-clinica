@@ -63,11 +63,17 @@ export default async function MinhaContaPage() {
             <h1 className="display mt-4 text-[clamp(2rem,4.4vw,3rem)] text-ink">
               Olá, {user.name.split(" ")[0]}
             </h1>
-            <p className="lede mt-3">{user.email}</p>
+            <p className="lede mt-3">
+              {user.email}
+              {user.phone ? ` · ${user.phone}` : ""}
+            </p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link href="/agendar" className="btn btn-primary">
               Agendar sessão
+            </Link>
+            <Link href="/minha-conta/configuracoes" className="btn btn-outline">
+              Editar dados
             </Link>
             <LogoutButton />
           </div>

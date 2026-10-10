@@ -2,6 +2,7 @@ export type StoredUser = {
   id: string;
   name: string;
   email: string;
+  phone: string;
   passwordHash: string;
   createdAt: string;
 };
@@ -10,6 +11,7 @@ export type PublicUser = {
   id: string;
   name: string;
   email: string;
+  phone: string;
 };
 
 export type AppointmentStatus = "agendada" | "cancelada" | "realizada";

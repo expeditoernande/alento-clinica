@@ -11,10 +11,12 @@ CREATE TABLE IF NOT EXISTS al_users (
   id text PRIMARY KEY,
   name text NOT NULL,
   email text NOT NULL,
+  phone text NOT NULL DEFAULT '',
   password_hash text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS al_users_email_key ON al_users (lower(email));
+ALTER TABLE al_users ADD COLUMN IF NOT EXISTS phone text NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS al_sessions (
   token text PRIMARY KEY,
@@ -179,7 +181,7 @@ export async function findUserByEmail(email: string): Promise<StoredUser | null>
   const normalized = email.trim().toLowerCase();
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
-      "SELECT id, name, email, password_hash, created_at FROM al_users WHERE lower(email) = $1",
+      "SELECT id, name, email, phone, password_hash, created_at FROM al_users WHERE lower(email) = $1",
       [normalized],
     );
     const row = result.rows[0];
@@ -188,6 +190,7 @@ export async function findUserByEmail(email: string): Promise<StoredUser | null>
       id: row.id as string,
       name: row.name as string,
       email: row.email as string,
+      phone: row.phone as string,
       passwordHash: row.password_hash as string,
       createdAt: new Date(row.created_at as string).toISOString(),
     } satisfies StoredUser;
@@ -201,7 +204,7 @@ export async function findUserByEmail(email: string): Promise<StoredUser | null>
 export async function findUserById(id: string): Promise<StoredUser | null> {
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
-      "SELECT id, name, email, password_hash, created_at FROM al_users WHERE id = $1",
+      "SELECT id, name, email, phone, password_hash, created_at FROM al_users WHERE id = $1",
       [id],
     );
     const row = result.rows[0];
@@ -210,6 +213,7 @@ export async function findUserById(id: string): Promise<StoredUser | null> {
       id: row.id as string,
       name: row.name as string,
       email: row.email as string,
+      phone: row.phone as string,
       passwordHash: row.password_hash as string,
       createdAt: new Date(row.created_at as string).toISOString(),
     } satisfies StoredUser;
@@ -223,10 +227,10 @@ export async function findUserById(id: string): Promise<StoredUser | null> {
 export async function createUser(user: StoredUser): Promise<{ ok: boolean; duplicate?: boolean }> {
   const viaPg = await withClient(async (client) => {
     const inserted = await client.query(
-      `INSERT INTO al_users (id, name, email, password_hash, created_at)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO al_users (id, name, email, phone, password_hash, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT ((lower(email))) DO NOTHING`,
-      [user.id, user.name, user.email, user.passwordHash, user.createdAt],
+      [user.id, user.name, user.email, user.phone, user.passwordHash, user.createdAt],
     );
     return { ok: (inserted.rowCount ?? 0) > 0, duplicate: (inserted.rowCount ?? 0) === 0 };
   });
@@ -239,6 +243,43 @@ export async function createUser(user: StoredUser): Promise<{ ok: boolean; dupli
     return { ok: false, duplicate: true };
   }
   data.users.push(user);
+  await writeLocal(data);
+  return { ok: true };
+}
+
+export async function updateUser(input: {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+}): Promise<{ ok: boolean; duplicate?: boolean }> {
+  const viaPg = await withClient(async (client) => {
+    try {
+      const result = await client.query(
+        `UPDATE al_users SET name = $2, email = $3, phone = $4 WHERE id = $1`,
+        [input.id, input.name, input.email, input.phone],
+      );
+      return { ok: (result.rowCount ?? 0) > 0 };
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") return { ok: false, duplicate: true };
+      throw error;
+    }
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? { ok: false };
+
+  const data = await readLocal();
+  const current = data.users.find((user) => user.id === input.id);
+  if (!current) return { ok: false };
+  if (
+    data.users.some(
+      (user) => user.id !== input.id && user.email.toLowerCase() === input.email.toLowerCase(),
+    )
+  ) {
+    return { ok: false, duplicate: true };
+  }
+  current.name = input.name;
+  current.email = input.email;
+  current.phone = input.phone;
   await writeLocal(data);
   return { ok: true };
 }
@@ -263,7 +304,7 @@ export async function createSession(token: string, userId: string, expiresAt: st
 export async function findSessionUser(token: string): Promise<StoredUser | null> {
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
-      `SELECT u.id, u.name, u.email, u.password_hash, u.created_at
+      `SELECT u.id, u.name, u.email, u.phone, u.password_hash, u.created_at
        FROM al_sessions s
        JOIN al_users u ON u.id = s.user_id
        WHERE s.token = $1 AND s.expires_at > now()`,
@@ -275,6 +316,7 @@ export async function findSessionUser(token: string): Promise<StoredUser | null>
       id: row.id as string,
       name: row.name as string,
       email: row.email as string,
+      phone: row.phone as string,
       passwordHash: row.password_hash as string,
       createdAt: new Date(row.created_at as string).toISOString(),
     } satisfies StoredUser;

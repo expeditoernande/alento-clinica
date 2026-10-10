@@ -275,6 +275,12 @@ body {
   border-color: var(--color-sage);
 }
 
+.field:disabled {
+  background-color: var(--color-mist);
+  color: var(--color-stone);
+  cursor: not-allowed;
+}
+
 .field[aria-invalid="true"] {
   border-color: var(--color-clay);
   background-color: rgba(185, 138, 106, 0.06);

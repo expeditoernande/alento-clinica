@@ -64,6 +64,9 @@ export function UserMenu({ user }: { user: PublicUser }) {
           <Link href="/minha-conta" role="menuitem" className={itemClass}>
             Minha conta
           </Link>
+          <Link href="/minha-conta/configuracoes" role="menuitem" className={itemClass}>
+            Editar dados
+          </Link>
           <Link href="/agendar" role="menuitem" className={itemClass}>
             Agendar consulta
           </Link>

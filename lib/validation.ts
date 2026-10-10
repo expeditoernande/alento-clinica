@@ -53,6 +53,23 @@ export function validateLogin(body: Record<string, unknown>): {
   return { data: { email, password }, errors };
 }
 
+export type ProfileInput = { email: string; phone: string };
+
+export function validateProfile(body: Record<string, unknown>): {
+  data?: ProfileInput;
+  errors: FieldErrors;
+} {
+  const errors: FieldErrors = {};
+  const email = clean(body.email, 120).toLowerCase();
+  const phone = clean(body.phone, 30);
+
+  if (!isEmail(email)) errors.email = "E-mail inválido.";
+  if (phone && digits(phone).length < 10) errors.phone = "Telefone incompleto. Inclua o DDD.";
+
+  if (Object.keys(errors).length) return { errors };
+  return { data: { email, phone }, errors };
+}
+
 export type ApplicationInput = {
   name: string;
   email: string;

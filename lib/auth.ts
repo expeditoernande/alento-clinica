@@ -39,7 +39,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 }
 
 function toPublic(user: StoredUser): PublicUser {
-  return { id: user.id, name: user.name, email: user.email };
+  return { id: user.id, name: user.name, email: user.email, phone: user.phone ?? "" };
 }
 
 function expiryDate() {
@@ -52,6 +52,7 @@ export async function registerUser(input: { name: string; email: string; passwor
     id: randomUUID(),
     name: input.name.trim(),
     email: input.email.trim().toLowerCase(),
+    phone: "",
     passwordHash,
     createdAt: new Date().toISOString(),
   };
