@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/site/Logo";
+import { UserMenu } from "@/components/site/UserMenu";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { nav } from "@/lib/site";
 import type { PublicUser } from "@/lib/types";
@@ -56,12 +57,7 @@ export function Nav({ user }: { user: PublicUser | null }) {
               <Link href="/agendar" className="btn btn-outline !px-5 !py-2.5 !text-[12px]">
                 Agendar
               </Link>
-              <Link
-                href="/minha-conta"
-                className="btn btn-primary !px-5 !py-2.5 !text-[12px]"
-              >
-                Olá, {user.name.split(" ")[0]}
-              </Link>
+              <UserMenu user={user} />
             </>
           ) : (
             <>
