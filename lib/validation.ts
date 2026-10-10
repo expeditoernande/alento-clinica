@@ -139,6 +139,28 @@ export function validateAppointment(body: Record<string, unknown>): {
   return { data: { psychologistSlug, date, time, mode, notes }, errors };
 }
 
+export function validateReschedule(body: Record<string, unknown>): {
+  data?: { date: string; time: string };
+  errors: FieldErrors;
+} {
+  const errors: FieldErrors = {};
+  const date = clean(body.date, 10);
+  const time = clean(body.time, 5);
+
+  if (!DATE_RE.test(date)) errors.date = "Data inválida.";
+  else {
+    const chosen = new Date(`${date}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (Number.isNaN(chosen.getTime())) errors.date = "Data inválida.";
+    else if (chosen < today) errors.date = "Escolha uma data a partir de hoje.";
+  }
+  if (!TIME_RE.test(time)) errors.time = "Horário inválido.";
+
+  if (Object.keys(errors).length) return { errors };
+  return { data: { date, time }, errors };
+}
+
 /* ------------------------------ honeypot + rate limit ------------------------------ */
 
 export function isBot(body: Record<string, unknown>): boolean {

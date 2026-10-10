@@ -456,12 +456,13 @@ export async function cancelAppointment(userId: string, id: string): Promise<boo
   return true;
 }
 
-export async function takenSlots(slug: string): Promise<string[]> {
+export async function takenSlots(slug: string, excludeId?: string): Promise<string[]> {
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
       `SELECT date, time FROM al_appointments
-       WHERE psychologist_slug = $1 AND status <> 'cancelada' AND date >= to_char(now(), 'YYYY-MM-DD')`,
-      [slug],
+       WHERE psychologist_slug = $1 AND status <> 'cancelada' AND date >= to_char(now(), 'YYYY-MM-DD')
+         AND ($2::text IS NULL OR id <> $2)`,
+      [slug, excludeId ?? null],
     );
     return result.rows.map((row) => `${row.date} ${row.time}`);
   });
@@ -469,8 +470,54 @@ export async function takenSlots(slug: string): Promise<string[]> {
 
   const data = await readLocal();
   return data.appointments
-    .filter((item) => item.psychologistSlug === slug && item.status !== "cancelada")
+    .filter(
+      (item) =>
+        item.psychologistSlug === slug &&
+        item.status !== "cancelada" &&
+        (!excludeId || item.id !== excludeId),
+    )
     .map((item) => `${item.date} ${item.time}`);
+}
+
+export async function rescheduleAppointment(
+  userId: string,
+  id: string,
+  slot: { date: string; time: string },
+): Promise<{ ok: boolean; conflict?: boolean; notFound?: boolean }> {
+  const viaPg = await withClient(async (client) => {
+    try {
+      const result = await client.query(
+        `UPDATE al_appointments SET date = $3, time = $4
+         WHERE id = $1 AND user_id = $2 AND status = 'agendada'`,
+        [id, userId, slot.date, slot.time],
+      );
+      if ((result.rowCount ?? 0) === 0) return { ok: false, notFound: true };
+      return { ok: true };
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") return { ok: false, conflict: true };
+      throw error;
+    }
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? { ok: false };
+
+  const data = await readLocal();
+  const target = data.appointments.find(
+    (item) => item.id === id && item.userId === userId && item.status === "agendada",
+  );
+  if (!target) return { ok: false, notFound: true };
+  const taken = data.appointments.some(
+    (item) =>
+      item.id !== id &&
+      item.status !== "cancelada" &&
+      item.psychologistSlug === target.psychologistSlug &&
+      item.date === slot.date &&
+      item.time === slot.time,
+  );
+  if (taken) return { ok: false, conflict: true };
+  target.date = slot.date;
+  target.time = slot.time;
+  await writeLocal(data);
+  return { ok: true };
 }
 
 /* ------------------------------ candidaturas ------------------------------ */
