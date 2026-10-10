@@ -44,7 +44,7 @@ export default function OpengraphImage() {
             para olhar para si
           </div>
           <div style={{ marginTop: 30, fontSize: 30, color: "#54564f" }}>
-            Psicologia online e presencial · {clinic.city}
+            {`Psicologia online e presencial · ${clinic.city}`}
           </div>
         </div>
       </div>
