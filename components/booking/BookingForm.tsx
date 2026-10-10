@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { approaches, psychologists, SESSION_SLOTS } from "@/lib/site";
@@ -25,12 +25,10 @@ export function BookingForm({
   initialSlug,
   initialDate,
   initialTime,
-  taken,
 }: {
   initialSlug?: string;
   initialDate?: string;
   initialTime?: string;
-  taken: Record<string, string[]>;
 }) {
   const router = useRouter();
   const [slug, setSlug] = useState<string>(
@@ -52,8 +50,26 @@ export function BookingForm({
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState<{ code: string } | null>(null);
+  const [slotData, setSlotData] = useState<{ key: string; slots: Set<string> } | null>(null);
 
-  const takenSet = useMemo(() => new Set(taken[slug] ?? []), [taken, slug]);
+  useEffect(() => {
+    let active = true;
+    const key = `${slug}:${date}`;
+    const params = new URLSearchParams({ slug, date });
+    fetch(`/api/availability?${params.toString()}`)
+      .then((response) => response.json())
+      .then((data: { ok?: boolean; available?: string[] }) => {
+        if (active && data.ok) setSlotData({ key, slots: new Set(data.available ?? []) });
+      })
+      .catch(() => {
+        if (active) setSlotData({ key, slots: new Set() });
+      });
+    return () => {
+      active = false;
+    };
+  }, [slug, date]);
+
+  const available = slotData && slotData.key === `${slug}:${date}` ? slotData.slots : null;
 
   function pickPerson(nextSlug: string) {
     const next = psychologists.find((item) => item.slug === nextSlug)!;
@@ -215,20 +231,23 @@ export function BookingForm({
 
           <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
             {SESSION_SLOTS.map((slot) => {
-              const busy = takenSet.has(`${date} ${slot}`);
+              const busy = available !== null && !available.has(slot);
+              const loading = available === null;
               const active = time === slot;
               return (
                 <button
                   type="button"
                   key={slot}
-                  disabled={busy}
+                  disabled={busy || loading}
                   onClick={() => setTime(slot)}
                   className={`rounded-xl border px-2 py-2.5 text-center text-[12px] transition-colors ${
                     busy
                       ? "cursor-not-allowed border-line bg-mist text-stone line-through"
-                      : active
-                        ? "border-sage bg-sage text-paper"
-                        : "border-line text-graphite hover:border-sage"
+                      : loading
+                        ? "cursor-wait border-line text-stone opacity-50"
+                        : active
+                          ? "border-sage bg-sage text-paper"
+                          : "border-line text-graphite hover:border-sage"
                   }`}
                 >
                   {slot}
@@ -236,6 +255,11 @@ export function BookingForm({
               );
             })}
           </div>
+          {available !== null && available.size === 0 && (
+            <p className="mt-3 text-[12px] text-stone">
+              Não há horários disponíveis nesta data. Escolha outro dia.
+            </p>
+          )}
           {errors.time && <p className="field-error">{errors.time}</p>}
         </fieldset>
 

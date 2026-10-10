@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Reveal } from "@/components/ui/Reveal";
-import { takenSlots } from "@/lib/db";
-import { heroSlide, psychologists, SESSION_SLOTS } from "@/lib/site";
+import { listBlocks, listWeeklyWindows, takenSlots } from "@/lib/db";
+import { baseSlotsFor, blockedSlotsFor } from "@/lib/availability";
+import { heroSlide, psychologists } from "@/lib/site";
 
 function isoDay(offset: number) {
   const date = new Date();
@@ -19,13 +20,27 @@ function formatDay(iso: string) {
 
 export async function Hero() {
   const featured = psychologists[0];
-  const taken = new Set(await takenSlots(featured.slug).catch(() => []));
+  const [windows, blocks, taken] = await Promise.all([
+    listWeeklyWindows(featured.slug).catch(() => []),
+    listBlocks(featured.slug).catch(() => []),
+    takenSlots(featured.slug).catch(() => []),
+  ]);
+  const takenSet = new Set(taken);
+  const blockedCache = new Map<string, Set<string>>();
+
+  const freeOn = (day: string) => {
+    if (!blockedCache.has(day)) blockedCache.set(day, new Set(blockedSlotsFor(blocks, day)));
+    const blocked = blockedCache.get(day)!;
+    return baseSlotsFor(windows, day).filter(
+      (time) => !blocked.has(time) && !takenSet.has(`${day} ${time}`),
+    );
+  };
 
   let bestDay = isoDay(1);
   let free: string[] = [];
   for (let offset = 0; offset < 14; offset++) {
     const day = isoDay(offset);
-    const slots = SESSION_SLOTS.filter((time) => !taken.has(`${day} ${time}`));
+    const slots = freeOn(day);
     if (slots.length >= 4) {
       bestDay = day;
       free = slots;

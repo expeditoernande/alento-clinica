@@ -3,9 +3,13 @@ export type StoredUser = {
   name: string;
   email: string;
   phone: string;
+  role: Role;
+  psychologistSlug: string | null;
   passwordHash: string;
   createdAt: string;
 };
+
+export type Role = "patient" | "psychologist";
 
 export type PublicUser = {
   id: string;
@@ -42,9 +46,25 @@ export type StoredApplication = {
 
 export type StorageKind = "postgres" | "arquivo local" | "memória";
 
-export type AdminUser = PublicUser & { createdAt: string };
+export type AdminUser = PublicUser & { createdAt: string; role: Role; psychologistSlug: string | null };
 
 export type AdminAppointment = StoredAppointment & {
   patientName: string;
   patientEmail: string;
+};
+
+export type WeeklyWindow = {
+  id: string;
+  weekday: number;
+  start: string;
+  end: string;
+};
+
+export type AvailabilityBlock = {
+  id: string;
+  date: string;
+  start: string | null;
+  end: string | null;
+  reason: string;
+  createdAt: string;
 };

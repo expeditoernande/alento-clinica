@@ -25,31 +25,29 @@ export function RescheduleForm({
 }) {
   const [date, setDate] = useState(initialDate >= today() ? initialDate : today());
   const [time, setTime] = useState("");
-  const [taken, setTaken] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [slotData, setSlotData] = useState<{ key: string; slots: Set<string> } | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
     let active = true;
-    fetch(
-      `/api/appointments/availability?slug=${encodeURIComponent(slug)}&exclude=${encodeURIComponent(id)}`,
-    )
+    const key = `${slug}:${date}`;
+    const params = new URLSearchParams({ slug, date, exclude: id });
+    fetch(`/api/availability?${params.toString()}`)
       .then((response) => response.json())
-      .then((data: { ok: boolean; taken?: string[] }) => {
-        if (active) setTaken(data.taken ?? []);
+      .then((data: { ok?: boolean; available?: string[] }) => {
+        if (active && data.ok) setSlotData({ key, slots: new Set(data.available ?? []) });
       })
-      .catch(() => undefined)
-      .finally(() => {
-        if (active) setLoading(false);
+      .catch(() => {
+        if (active) setSlotData({ key, slots: new Set() });
       });
     return () => {
       active = false;
     };
-  }, [slug, id]);
+  }, [slug, id, date]);
 
-  const takenSet = new Set(taken);
+  const available = slotData && slotData.key === `${slug}:${date}` ? slotData.slots : null;
 
   async function submit() {
     setPending(true);
@@ -100,7 +98,8 @@ export function RescheduleForm({
 
       <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
         {SESSION_SLOTS.map((slot) => {
-          const busy = takenSet.has(`${date} ${slot}`);
+          const loading = available === null;
+          const busy = available !== null && !available.has(slot);
           const active = time === slot;
           return (
             <button
@@ -111,9 +110,11 @@ export function RescheduleForm({
               className={`rounded-xl border bg-paper px-2 py-2.5 text-center text-[12px] transition-colors ${
                 busy
                   ? "cursor-not-allowed border-line text-stone line-through"
-                  : active
-                    ? "border-sage bg-sage text-paper"
-                    : "border-line text-graphite hover:border-sage"
+                  : loading
+                    ? "cursor-wait border-line text-stone opacity-50"
+                    : active
+                      ? "border-sage bg-sage text-paper"
+                      : "border-line text-graphite hover:border-sage"
               }`}
             >
               {slot}
@@ -129,7 +130,7 @@ export function RescheduleForm({
           type="button"
           className="btn btn-primary !px-5 !py-2.5 !text-[12px]"
           onClick={submit}
-          disabled={pending || loading || !time}
+          disabled={pending || available === null || !time}
         >
           {pending ? "Salvando…" : "Confirmar novo horário"}
         </button>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
-import { cancelAppointment, rescheduleAppointment } from "@/lib/db";
+import { cancelAppointment, listAppointments, rescheduleAppointment } from "@/lib/db";
+import { availableSlots } from "@/lib/availability";
 import { clientKey, rateLimit, validateReschedule } from "@/lib/validation";
 
 export async function PATCH(
@@ -33,6 +34,19 @@ export async function PATCH(
   }
 
   const { id } = await params;
+
+  const appointments = await listAppointments(user.id);
+  const target = appointments.find((item) => item.id === id && item.status === "agendada");
+  if (target) {
+    const slots = await availableSlots(target.psychologistSlug, data.date, id);
+    if (!slots.includes(data.time)) {
+      return NextResponse.json(
+        { ok: false, errors: { time: "Horário indisponível. Escolha outro." } },
+        { status: 422 },
+      );
+    }
+  }
+
   const result = await rescheduleAppointment(user.id, id, data);
   if (!result.ok) {
     if (result.conflict) {

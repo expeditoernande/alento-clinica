@@ -1,11 +1,15 @@
+import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import type {
   AdminAppointment,
   AdminUser,
+  AvailabilityBlock,
+  Role,
   StoredApplication,
   StoredAppointment,
   StoredUser,
   StorageKind,
+  WeeklyWindow,
 } from "@/lib/types";
 
 const SCHEMA_SQL = `
@@ -14,11 +18,15 @@ CREATE TABLE IF NOT EXISTS al_users (
   name text NOT NULL,
   email text NOT NULL,
   phone text NOT NULL DEFAULT '',
+  role text NOT NULL DEFAULT 'patient',
+  psychologist_slug text,
   password_hash text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS al_users_email_key ON al_users (lower(email));
 ALTER TABLE al_users ADD COLUMN IF NOT EXISTS phone text NOT NULL DEFAULT '';
+ALTER TABLE al_users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'patient';
+ALTER TABLE al_users ADD COLUMN IF NOT EXISTS psychologist_slug text;
 
 CREATE TABLE IF NOT EXISTS al_sessions (
   token text PRIMARY KEY,
@@ -58,6 +66,29 @@ CREATE TABLE IF NOT EXISTS al_applications (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS al_applications_created_idx ON al_applications (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS al_availability_weekly (
+  id text PRIMARY KEY,
+  psychologist_slug text NOT NULL,
+  weekday int NOT NULL,
+  start_time text NOT NULL,
+  end_time text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS al_availability_weekly_slug_idx
+  ON al_availability_weekly (psychologist_slug, weekday);
+
+CREATE TABLE IF NOT EXISTS al_availability_blocks (
+  id text PRIMARY KEY,
+  psychologist_slug text NOT NULL,
+  date text NOT NULL,
+  start_time text,
+  end_time text,
+  reason text NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS al_availability_blocks_slug_idx
+  ON al_availability_blocks (psychologist_slug, date);
 `;
 
 type LocalData = {
@@ -65,6 +96,8 @@ type LocalData = {
   sessions: Array<{ token: string; userId: string; createdAt: string; expiresAt: string }>;
   appointments: StoredAppointment[];
   applications: StoredApplication[];
+  weekly: Array<{ id: string; slug: string; weekday: number; start: string; end: string }>;
+  blocks: Array<AvailabilityBlock & { slug: string }>;
 };
 
 type Global = typeof globalThis & {
@@ -77,7 +110,7 @@ const scope = globalThis as Global;
 const onVercel = Boolean(process.env.VERCEL);
 
 function emptyData(): LocalData {
-  return { users: [], sessions: [], appointments: [], applications: [] };
+  return { users: [], sessions: [], appointments: [], applications: [], weekly: [], blocks: [] };
 }
 
 function connectionString() {
@@ -157,6 +190,8 @@ async function readLocal(): Promise<LocalData> {
       sessions: parsed.sessions ?? [],
       appointments: parsed.appointments ?? [],
       applications: parsed.applications ?? [],
+      weekly: parsed.weekly ?? [],
+      blocks: parsed.blocks ?? [],
     };
   } catch {
     return emptyData();
@@ -179,23 +214,40 @@ async function writeLocal(data: LocalData): Promise<void> {
 
 /* ------------------------------ usuários ------------------------------ */
 
+type UserRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  psychologist_slug: string | null;
+  password_hash: string;
+  created_at: string;
+};
+
+function mapUser(row: UserRow): StoredUser {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    role: (row.role === "psychologist" ? "psychologist" : "patient") as Role,
+    psychologistSlug: row.psychologist_slug ?? null,
+    passwordHash: row.password_hash,
+    createdAt: new Date(row.created_at).toISOString(),
+  };
+}
+
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
   const normalized = email.trim().toLowerCase();
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
-      "SELECT id, name, email, phone, password_hash, created_at FROM al_users WHERE lower(email) = $1",
+      "SELECT id, name, email, phone, role, psychologist_slug, password_hash, created_at FROM al_users WHERE lower(email) = $1",
       [normalized],
     );
     const row = result.rows[0];
     if (!row) return null;
-    return {
-      id: row.id as string,
-      name: row.name as string,
-      email: row.email as string,
-      phone: row.phone as string,
-      passwordHash: row.password_hash as string,
-      createdAt: new Date(row.created_at as string).toISOString(),
-    } satisfies StoredUser;
+    return mapUser(row as UserRow);
   });
   if (viaPg !== null || storageKind() === "postgres") return viaPg;
 
@@ -206,19 +258,12 @@ export async function findUserByEmail(email: string): Promise<StoredUser | null>
 export async function findUserById(id: string): Promise<StoredUser | null> {
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
-      "SELECT id, name, email, phone, password_hash, created_at FROM al_users WHERE id = $1",
+      "SELECT id, name, email, phone, role, psychologist_slug, password_hash, created_at FROM al_users WHERE id = $1",
       [id],
     );
     const row = result.rows[0];
     if (!row) return null;
-    return {
-      id: row.id as string,
-      name: row.name as string,
-      email: row.email as string,
-      phone: row.phone as string,
-      passwordHash: row.password_hash as string,
-      createdAt: new Date(row.created_at as string).toISOString(),
-    } satisfies StoredUser;
+    return mapUser(row as UserRow);
   });
   if (viaPg !== null || storageKind() === "postgres") return viaPg;
 
@@ -229,10 +274,19 @@ export async function findUserById(id: string): Promise<StoredUser | null> {
 export async function createUser(user: StoredUser): Promise<{ ok: boolean; duplicate?: boolean }> {
   const viaPg = await withClient(async (client) => {
     const inserted = await client.query(
-      `INSERT INTO al_users (id, name, email, phone, password_hash, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO al_users (id, name, email, phone, role, psychologist_slug, password_hash, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT ((lower(email))) DO NOTHING`,
-      [user.id, user.name, user.email, user.phone, user.passwordHash, user.createdAt],
+      [
+        user.id,
+        user.name,
+        user.email,
+        user.phone,
+        user.role,
+        user.psychologistSlug,
+        user.passwordHash,
+        user.createdAt,
+      ],
     );
     return { ok: (inserted.rowCount ?? 0) > 0, duplicate: (inserted.rowCount ?? 0) === 0 };
   });
@@ -322,7 +376,7 @@ export async function createSession(token: string, userId: string, expiresAt: st
 export async function findSessionUser(token: string): Promise<StoredUser | null> {
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
-      `SELECT u.id, u.name, u.email, u.phone, u.password_hash, u.created_at
+      `SELECT u.id, u.name, u.email, u.phone, u.role, u.psychologist_slug, u.password_hash, u.created_at
        FROM al_sessions s
        JOIN al_users u ON u.id = s.user_id
        WHERE s.token = $1 AND s.expires_at > now()`,
@@ -330,14 +384,7 @@ export async function findSessionUser(token: string): Promise<StoredUser | null>
     );
     const row = result.rows[0];
     if (!row) return null;
-    return {
-      id: row.id as string,
-      name: row.name as string,
-      email: row.email as string,
-      phone: row.phone as string,
-      passwordHash: row.password_hash as string,
-      createdAt: new Date(row.created_at as string).toISOString(),
-    } satisfies StoredUser;
+    return mapUser(row as UserRow);
   });
   if (viaPg !== null || storageKind() === "postgres") return viaPg;
 
@@ -605,7 +652,7 @@ export async function countUsers(): Promise<number> {
 export async function listAllUsers(limit = 100): Promise<AdminUser[]> {
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
-      `SELECT id, name, email, phone, created_at FROM al_users
+      `SELECT id, name, email, phone, role, psychologist_slug, created_at FROM al_users
        ORDER BY created_at DESC LIMIT $1`,
       [limit],
     );
@@ -616,6 +663,8 @@ export async function listAllUsers(limit = 100): Promise<AdminUser[]> {
           name: row.name as string,
           email: row.email as string,
           phone: row.phone as string,
+          role: (row.role === "psychologist" ? "psychologist" : "patient") as Role,
+          psychologistSlug: (row.psychologist_slug as string | null) ?? null,
           createdAt: new Date(row.created_at as string).toISOString(),
         }) satisfies AdminUser,
     );
@@ -632,8 +681,33 @@ export async function listAllUsers(limit = 100): Promise<AdminUser[]> {
       name: user.name,
       email: user.email,
       phone: user.phone ?? "",
+      role: user.role ?? "patient",
+      psychologistSlug: user.psychologistSlug ?? null,
       createdAt: user.createdAt,
     }));
+}
+
+export async function updateUserRole(
+  id: string,
+  role: Role,
+  psychologistSlug: string | null,
+): Promise<boolean> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      "UPDATE al_users SET role = $2, psychologist_slug = $3 WHERE id = $1",
+      [id, role, psychologistSlug],
+    );
+    return (result.rowCount ?? 0) > 0;
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? false;
+
+  const data = await readLocal();
+  const user = data.users.find((item) => item.id === id);
+  if (!user) return false;
+  user.role = role;
+  user.psychologistSlug = psychologistSlug;
+  await writeLocal(data);
+  return true;
 }
 
 export async function listRecentAppointments(limit = 50): Promise<AdminAppointment[]> {
@@ -698,6 +772,139 @@ export async function listApplications(limit = 50): Promise<StoredApplication[]>
 
   const data = await readLocal();
   return data.applications.slice(0, limit);
+}
+
+/* ------------------------------ disponibilidade ------------------------------ */
+
+export async function listWeeklyWindows(slug: string): Promise<WeeklyWindow[]> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      `SELECT id, weekday, start_time, end_time FROM al_availability_weekly
+       WHERE psychologist_slug = $1 ORDER BY weekday, start_time`,
+      [slug],
+    );
+    return result.rows.map(
+      (row) =>
+        ({
+          id: row.id as string,
+          weekday: Number(row.weekday),
+          start: row.start_time as string,
+          end: row.end_time as string,
+        }) satisfies WeeklyWindow,
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? [];
+
+  const data = await readLocal();
+  return data.weekly
+    .filter((item) => item.slug === slug)
+    .sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start))
+    .map((item) => ({ id: item.id, weekday: item.weekday, start: item.start, end: item.end }));
+}
+
+export async function replaceWeeklyWindows(
+  slug: string,
+  windows: Array<{ weekday: number; start: string; end: string }>,
+): Promise<void> {
+  const viaPg = await withClient(async (client) => {
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM al_availability_weekly WHERE psychologist_slug = $1", [slug]);
+      for (const window of windows) {
+        await client.query(
+          `INSERT INTO al_availability_weekly (id, psychologist_slug, weekday, start_time, end_time)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [randomUUID(), slug, window.weekday, window.start, window.end],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
+  if (viaPg !== null || storageKind() === "postgres") return;
+
+  const data = await readLocal();
+  data.weekly = data.weekly.filter((item) => item.slug !== slug);
+  for (const window of windows) {
+    data.weekly.push({ id: randomUUID(), slug, ...window });
+  }
+  await writeLocal(data);
+}
+
+export async function listBlocks(slug: string): Promise<AvailabilityBlock[]> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      `SELECT id, date, start_time, end_time, reason, created_at FROM al_availability_blocks
+       WHERE psychologist_slug = $1 AND date >= to_char(now(), 'YYYY-MM-DD')
+       ORDER BY date`,
+      [slug],
+    );
+    return result.rows.map(
+      (row) =>
+        ({
+          id: row.id as string,
+          date: row.date as string,
+          start: (row.start_time as string | null) ?? null,
+          end: (row.end_time as string | null) ?? null,
+          reason: row.reason as string,
+          createdAt: new Date(row.created_at as string).toISOString(),
+        }) satisfies AvailabilityBlock,
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? [];
+
+  const data = await readLocal();
+  const today = new Date().toISOString().slice(0, 10);
+  return data.blocks
+    .filter((item) => item.slug === slug && item.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function createBlock(
+  slug: string,
+  input: { date: string; start: string | null; end: string | null; reason: string },
+): Promise<AvailabilityBlock> {
+  const block: AvailabilityBlock = {
+    id: randomUUID(),
+    date: input.date,
+    start: input.start,
+    end: input.end,
+    reason: input.reason,
+    createdAt: new Date().toISOString(),
+  };
+  const viaPg = await withClient(async (client) => {
+    await client.query(
+      `INSERT INTO al_availability_blocks
+         (id, psychologist_slug, date, start_time, end_time, reason, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [block.id, slug, block.date, block.start, block.end, block.reason, block.createdAt],
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return block;
+
+  const data = await readLocal();
+  data.blocks.push({ ...block, slug });
+  await writeLocal(data);
+  return block;
+}
+
+export async function deleteBlock(slug: string, id: string): Promise<boolean> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      "DELETE FROM al_availability_blocks WHERE id = $1 AND psychologist_slug = $2",
+      [id, slug],
+    );
+    return (result.rowCount ?? 0) > 0;
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? false;
+
+  const data = await readLocal();
+  const before = data.blocks.length;
+  data.blocks = data.blocks.filter((item) => !(item.id === id && item.slug === slug));
+  await writeLocal(data);
+  return data.blocks.length < before;
 }
 
 /* ------------------------------ diagnóstico ------------------------------ */

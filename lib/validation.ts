@@ -161,8 +161,67 @@ export function validateReschedule(body: Record<string, unknown>): {
   return { data: { date, time }, errors };
 }
 
-/* ------------------------------ honeypot + rate limit ------------------------------ */
+export type WeeklyWindowInput = { weekday: number; start: string; end: string };
 
+export function validateWeeklyWindows(body: Record<string, unknown>): {
+  data?: WeeklyWindowInput[];
+  errors: FieldErrors;
+} {
+  const errors: FieldErrors = {};
+  const raw = Array.isArray(body.windows) ? body.windows : [];
+  const data: WeeklyWindowInput[] = [];
+
+  if (raw.length > 60) return { errors: { windows: "Grade muito extensa." } };
+
+  raw.forEach((item) => {
+    const entry = (item ?? {}) as Record<string, unknown>;
+    const weekday = Number(entry.weekday);
+    const start = clean(entry.start, 5);
+    const end = clean(entry.end, 5);
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return;
+    if (!TIME_RE.test(start) || !TIME_RE.test(end) || start >= end) return;
+    data.push({ weekday, start, end });
+  });
+
+  if (raw.length > 0 && data.length !== raw.length) {
+    errors.windows = "Verifique os horários: o início deve ser antes do fim.";
+  }
+
+  if (Object.keys(errors).length) return { errors };
+  return { data, errors };
+}
+
+export type BlockInput = { date: string; start: string | null; end: string | null; reason: string };
+
+export function validateBlock(body: Record<string, unknown>): {
+  data?: BlockInput;
+  errors: FieldErrors;
+} {
+  const errors: FieldErrors = {};
+  const date = clean(body.date, 10);
+  const reason = clean(body.reason, 120);
+  const start = clean(body.start, 5);
+  const end = clean(body.end, 5);
+  const fullDay = body.fullDay === true || (!start && !end);
+
+  if (!DATE_RE.test(date)) errors.date = "Data inválida.";
+
+  let rangeStart: string | null = null;
+  let rangeEnd: string | null = null;
+  if (!fullDay) {
+    if (!TIME_RE.test(start) || !TIME_RE.test(end) || start >= end) {
+      errors.start = "Informe um período válido.";
+    } else {
+      rangeStart = start;
+      rangeEnd = end;
+    }
+  }
+
+  if (Object.keys(errors).length) return { errors };
+  return { data: { date, start: rangeStart, end: rangeEnd, reason }, errors };
+}
+
+/* ------------------------------ honeypot + rate limit ------------------------------ */
 export function isBot(body: Record<string, unknown>): boolean {
   const honeypot = typeof body.website === "string" ? body.website : "";
   return honeypot.trim().length > 0;

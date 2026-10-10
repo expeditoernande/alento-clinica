@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { PublicShell } from "@/components/site/PublicShell";
+import { RoleAssignForm } from "@/components/admin/RoleAssignForm";
 import { currentUser, isAdmin } from "@/lib/auth";
 import {
   countAppointments,
   countApplications,
   countUsers,
+  listAllUsers,
   listApplications,
   listRecentAppointments,
 } from "@/lib/db";
@@ -49,13 +51,14 @@ export default async function AdminPage() {
   if (!user) redirect("/entrar?next=/admin");
   if (!isAdmin(user)) notFound();
 
-  const [users, appointmentsCount, applicationsCount, appointments, applications] =
+  const [users, appointmentsCount, applicationsCount, appointments, applications, allUsers] =
     await Promise.all([
       countUsers(),
       countAppointments(),
       countApplications(),
       listRecentAppointments(30),
       listApplications(20),
+      listAllUsers(50),
     ]);
 
   const stats = [
@@ -84,6 +87,52 @@ export default async function AdminPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="section pt-0">
+        <div className="shell">
+          <h2 className="text-[17px] font-medium text-ink">Acessos e perfis</h2>
+          <p className="mt-1 text-[13px] text-stone">
+            Vincule uma conta de psicólogo(a) a um dos perfis da clínica para liberar a agenda.
+          </p>
+
+          <div className="mt-5">
+            <RoleAssignForm
+              options={psychologists.map((person) => ({ slug: person.slug, name: person.name }))}
+            />
+          </div>
+
+          {allUsers.length > 0 && (
+            <div className="card mt-5 overflow-x-auto">
+              <table className="w-full min-w-[720px] border-collapse text-left text-[13px]">
+                <thead>
+                  <tr className="border-b border-line text-stone">
+                    <th className="px-4 py-3 font-medium">Nome</th>
+                    <th className="px-4 py-3 font-medium">E-mail</th>
+                    <th className="px-4 py-3 font-medium">Telefone</th>
+                    <th className="px-4 py-3 font-medium">Perfil</th>
+                    <th className="px-4 py-3 font-medium">Desde</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allUsers.map((item) => (
+                    <tr key={item.id} className="border-b border-line last:border-0">
+                      <td className="px-4 py-3 text-ink">{item.name}</td>
+                      <td className="px-4 py-3 text-graphite">{item.email}</td>
+                      <td className="px-4 py-3 text-graphite">{item.phone || "—"}</td>
+                      <td className="px-4 py-3 text-graphite">
+                        {item.role === "psychologist"
+                          ? `Psicólogo(a) · ${psychologistName(item.psychologistSlug ?? "")}`
+                          : "Paciente"}
+                      </td>
+                      <td className="px-4 py-3 text-graphite">{formatDay(item.createdAt.slice(0, 10))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
 

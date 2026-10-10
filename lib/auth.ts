@@ -53,6 +53,8 @@ export async function registerUser(input: { name: string; email: string; passwor
     name: input.name.trim(),
     email: input.email.trim().toLowerCase(),
     phone: "",
+    role: "patient",
+    psychologistSlug: null,
     passwordHash,
     createdAt: new Date().toISOString(),
   };
@@ -92,11 +94,15 @@ export async function endSession() {
   store.delete(SESSION_COOKIE);
 }
 
-export async function currentUser(): Promise<PublicUser | null> {
+export async function currentStoredUser(): Promise<StoredUser | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  const user = await findSessionUser(token);
+  return findSessionUser(token);
+}
+
+export async function currentUser(): Promise<PublicUser | null> {
+  const user = await currentStoredUser();
   return user ? toPublic(user) : null;
 }
 
@@ -120,4 +126,11 @@ export function adminEmails(): string[] {
 export function isAdmin(user: PublicUser | null | undefined): boolean {
   if (!user) return false;
   return adminEmails().includes(user.email.toLowerCase());
+}
+
+/** Retorna o slug do psicólogo logado, ou null se não for psicólogo. */
+export async function currentPsychologistSlug(): Promise<string | null> {
+  const user = await currentStoredUser();
+  if (!user || user.role !== "psychologist" || !user.psychologistSlug) return null;
+  return user.psychologistSlug;
 }

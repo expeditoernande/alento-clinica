@@ -244,6 +244,18 @@ export const faqs: Faq[] = [
 
 export const sessionPrices = { min: 170, max: 220 };
 
+export const WEEKDAY_LABELS = [
+  "Domingo",
+  "Segunda-feira",
+  "Terça-feira",
+  "Quarta-feira",
+  "Quinta-feira",
+  "Sexta-feira",
+  "Sábado",
+];
+
+export const WEEKDAY_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
 export const SESSION_SLOTS = [
   "08:00",
   "09:00",

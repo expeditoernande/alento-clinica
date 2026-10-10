@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { createAppointment, listAppointments } from "@/lib/db";
+import { availableSlots } from "@/lib/availability";
 import { clientKey, code, rateLimit, validateAppointment } from "@/lib/validation";
 import { psychologists } from "@/lib/site";
 import type { StoredAppointment } from "@/lib/types";
@@ -51,6 +52,14 @@ export async function POST(request: Request) {
   if (data.mode === "presencial" && !person.inPerson) {
     return NextResponse.json(
       { ok: false, errors: { mode: "Este psicólogo não atende presencialmente." } },
+      { status: 422 },
+    );
+  }
+
+  const slots = await availableSlots(person.slug, data.date);
+  if (!slots.includes(data.time)) {
+    return NextResponse.json(
+      { ok: false, errors: { time: "Horário indisponível. Escolha outro." } },
       { status: 422 },
     );
   }

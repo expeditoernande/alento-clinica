@@ -3,8 +3,6 @@ import { redirect } from "next/navigation";
 import { PublicShell } from "@/components/site/PublicShell";
 import { BookingForm } from "@/components/booking/BookingForm";
 import { currentUser } from "@/lib/auth";
-import { takenSlots } from "@/lib/db";
-import { psychologists } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Agendar consulta",
@@ -29,11 +27,6 @@ export default async function AgendarPage({
     redirect(`/entrar?next=${encodeURIComponent(`/agendar${suffix ? `?${suffix}` : ""}`)}`);
   }
 
-  const entries = await Promise.all(
-    psychologists.map(async (person) => [person.slug, await takenSlots(person.slug)] as const),
-  );
-  const taken: Record<string, string[]> = Object.fromEntries(entries);
-
   return (
     <PublicShell>
       <section className="border-b border-line">
@@ -51,7 +44,7 @@ export default async function AgendarPage({
 
       <section className="section pt-12 md:pt-14">
         <div className="shell">
-          <BookingForm initialSlug={psi} initialDate={date} initialTime={time} taken={taken} />
+          <BookingForm initialSlug={psi} initialDate={date} initialTime={time} />
         </div>
       </section>
     </PublicShell>

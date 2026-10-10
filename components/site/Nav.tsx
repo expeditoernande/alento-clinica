@@ -8,7 +8,15 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { nav } from "@/lib/site";
 import type { PublicUser } from "@/lib/types";
 
-export function Nav({ user, isAdmin = false }: { user: PublicUser | null; isAdmin?: boolean }) {
+export function Nav({
+  user,
+  isAdmin = false,
+  isPsychologist = false,
+}: {
+  user: PublicUser | null;
+  isAdmin?: boolean;
+  isPsychologist?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -57,7 +65,7 @@ export function Nav({ user, isAdmin = false }: { user: PublicUser | null; isAdmi
               <Link href="/agendar" className="btn btn-outline !px-5 !py-2.5 !text-[12px]">
                 Agendar
               </Link>
-              <UserMenu user={user} isAdmin={isAdmin} />
+              <UserMenu user={user} isAdmin={isAdmin} isPsychologist={isPsychologist} />
             </>
           ) : (
             <>
@@ -128,6 +136,11 @@ export function Nav({ user, isAdmin = false }: { user: PublicUser | null; isAdmi
                   <Link href="/minha-conta" onClick={close} className="btn btn-primary">
                     Minha conta
                   </Link>
+                  {isPsychologist && (
+                    <Link href="/agenda" onClick={close} className="btn btn-outline">
+                      Minha agenda
+                    </Link>
+                  )}
                   {isAdmin && (
                     <Link href="/admin" onClick={close} className="btn btn-outline">
                       Administração
