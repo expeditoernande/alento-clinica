@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@/lib/auth";
-import { updateUser } from "@/lib/db";
+import { currentUser, endSession } from "@/lib/auth";
+import { deleteUser, updateUser } from "@/lib/db";
 import { clientKey, rateLimit, validateProfile } from "@/lib/validation";
 
 export async function GET() {
@@ -60,4 +60,36 @@ export async function PATCH(request: Request) {
     ok: true,
     user: { ...user, email: data.email, phone: data.phone },
   });
+}
+
+export async function DELETE(request: Request) {
+  const user = await currentUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, message: "Faça login para continuar." }, { status: 401 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ ok: false, message: "Requisição inválida." }, { status: 400 });
+  }
+
+  if (body.confirm !== "EXCLUIR") {
+    return NextResponse.json(
+      { ok: false, message: "Digite EXCLUIR para confirmar a exclusão da conta." },
+      { status: 422 },
+    );
+  }
+
+  await endSession();
+  const removed = await deleteUser(user.id);
+  if (!removed) {
+    return NextResponse.json(
+      { ok: false, message: "Não foi possível excluir a conta agora." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true });
 }

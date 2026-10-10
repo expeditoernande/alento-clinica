@@ -55,6 +55,14 @@ export function Footer() {
       <div className="border-t border-line">
         <div className="shell flex flex-col gap-3 py-6 text-[12px] text-stone md:flex-row md:items-center md:justify-between">
           <p>© {new Date().getFullYear()} {clinic.legal}</p>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link href="/privacidade" className="link-sage">
+              Política de privacidade
+            </Link>
+            <Link href="/termos" className="link-sage">
+              Termos de uso
+            </Link>
+          </div>
           <p>
             Este site não substitui atendimento de emergência. Em crise, ligue 188 (CVV) ou 192.
           </p>

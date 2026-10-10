@@ -1,18 +1,24 @@
 import type { MetadataRoute } from "next";
-
-function baseUrl() {
-  return (process.env.SITE_URL || "https://alento-clinica.vercel.app").replace(/\/$/, "");
-}
+import { siteUrl } from "@/lib/seo";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = baseUrl();
+  const base = siteUrl();
   const now = new Date();
 
-  return [
-    { url: `${base}/`, lastModified: now, changeFrequency: "monthly", priority: 1 },
-    { url: `${base}/psicologos`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${base}/quero-atender`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${base}/criar-conta`, lastModified: now, changeFrequency: "yearly", priority: 0.5 },
-    { url: `${base}/entrar`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+  const routes: Array<{ path: string; priority: number; freq: "weekly" | "monthly" }> = [
+    { path: "", priority: 1, freq: "weekly" },
+    { path: "/psicologos", priority: 0.9, freq: "weekly" },
+    { path: "/quero-atender", priority: 0.6, freq: "monthly" },
+    { path: "/entrar", priority: 0.4, freq: "monthly" },
+    { path: "/criar-conta", priority: 0.4, freq: "monthly" },
+    { path: "/privacidade", priority: 0.3, freq: "monthly" },
+    { path: "/termos", priority: 0.3, freq: "monthly" },
   ];
+
+  return routes.map((route) => ({
+    url: `${base}${route.path}`,
+    lastModified: now,
+    changeFrequency: route.freq,
+    priority: route.priority,
+  }));
 }

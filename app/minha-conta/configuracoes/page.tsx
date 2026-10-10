@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PublicShell } from "@/components/site/PublicShell";
 import { ProfileForm } from "@/components/account/ProfileForm";
+import { PrivacyData } from "@/components/account/PrivacyData";
 import { currentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -29,8 +30,9 @@ export default async function ConfiguracoesPage() {
 
       <section className="section pt-10">
         <div className="shell">
-          <div className="max-w-2xl">
+          <div className="max-w-2xl space-y-6">
             <ProfileForm initial={{ name: user.name, email: user.email, phone: user.phone }} />
+            <PrivacyData />
           </div>
         </div>
       </section>

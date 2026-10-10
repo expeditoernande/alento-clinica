@@ -286,6 +286,22 @@ export async function updateUser(input: {
   return { ok: true };
 }
 
+export async function deleteUser(id: string): Promise<boolean> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query("DELETE FROM al_users WHERE id = $1", [id]);
+    return (result.rowCount ?? 0) > 0;
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? false;
+
+  const data = await readLocal();
+  const before = data.users.length;
+  data.users = data.users.filter((user) => user.id !== id);
+  data.sessions = data.sessions.filter((session) => session.userId !== id);
+  data.appointments = data.appointments.filter((item) => item.userId !== id);
+  await writeLocal(data);
+  return data.users.length < before;
+}
+
 /* ------------------------------ sessões ------------------------------ */
 
 export async function createSession(token: string, userId: string, expiresAt: string): Promise<void> {
