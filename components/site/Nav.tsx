@@ -19,6 +19,10 @@ export function Nav({ user }: { user: PublicUser | null }) {
 
   const close = () => setOpen(false);
 
+  // Itens que levam a outra página (sem âncora) ganham um contorno, para
+  // indicar que a navegação sai da página atual.
+  const isPageLink = (href: string) => !href.includes("#");
+
   return (
     <header
       className={`sticky top-0 z-50 border-b bg-paper/85 backdrop-blur transition-colors ${
@@ -33,7 +37,11 @@ export function Nav({ user }: { user: PublicUser | null }) {
             <Link
               key={item.href}
               href={item.href}
-              className="link-sage text-[13px] text-graphite transition-colors hover:text-ink"
+              className={
+                isPageLink(item.href)
+                  ? "rounded-full border border-line px-4 py-1.5 text-[13px] text-graphite transition-colors hover:border-sage hover:text-sage"
+                  : "link-sage text-[13px] text-graphite transition-colors hover:text-ink"
+              }
             >
               {item.label}
             </Link>
@@ -101,7 +109,11 @@ export function Nav({ user }: { user: PublicUser | null }) {
                 key={item.href}
                 href={item.href}
                 onClick={close}
-                className="rounded-xl px-3 py-3 text-[15px] text-graphite hover:bg-mist hover:text-ink"
+                className={
+                  isPageLink(item.href)
+                    ? "rounded-xl border border-line px-3 py-3 text-[15px] text-graphite transition-colors hover:border-sage hover:text-sage"
+                    : "rounded-xl px-3 py-3 text-[15px] text-graphite hover:bg-mist hover:text-ink"
+                }
               >
                 {item.label}
               </Link>
