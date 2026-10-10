@@ -1,12 +1,27 @@
 "use client";
 
+import type { MouseEvent } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function Logo({ className = "" }: { className?: string }) {
+  const pathname = usePathname();
+
+  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+    // Já estamos na home: não navega (isso interromperia o scroll), apenas
+    // remove a âncora da URL e sobe ao topo.
+    if (pathname !== "/") return;
+    event.preventDefault();
+    if (window.location.hash) {
+      window.history.replaceState(null, "", "/");
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   return (
     <Link
       href="/"
-      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      onClick={handleClick}
       className={`group inline-flex items-center gap-2.5 ${className}`}
       aria-label="ALENTO — clínica de psicologia, ir para o início"
     >
