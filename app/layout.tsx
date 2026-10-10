@@ -61,9 +61,18 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       data-scroll-behavior="smooth"
+      suppressHydrationWarning
       className={`${inter.variable} ${fraunces.variable}`}
     >
       <body>
+        <script
+          // Evita o "flash" de tema claro: aplica o tema salvo (ou a
+          // preferência do sistema) antes de qualquer pintura da página.
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var s=localStorage.getItem('alento-theme');var d=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();",
+          }}
+        />
         <RevealRuntime />
         <ScrollReset />
         {children}

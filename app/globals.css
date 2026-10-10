@@ -22,6 +22,43 @@
   --gutter: 18px;
 }
 
+/*
+ * Tema escuro: as utilidades do Tailwind v4 apontam para as variáveis
+ * (var(--color-*)), então basta sobrescrevê-las sob `.dark` para re-tematizar
+ * o site inteiro de uma vez.
+ */
+.dark {
+  color-scheme: dark;
+  --color-paper: #161816;
+  --color-mist: #1f211f;
+  --color-sand: #242623;
+  --color-line: #2c2f2b;
+  --color-ink: #f4f3ef;
+  --color-graphite: #c9c7c1;
+  --color-stone: #a3a099;
+  --color-sage: #a7c4a8;
+  --color-sage-soft: #223027;
+  --color-clay: #cb9e80;
+}
+
+.dark .notice-error {
+  color: #e2b79c;
+  border-color: rgba(203, 158, 128, 0.55);
+}
+
+/* Alterna o ícone sol/lua do botão de tema sem depender de JavaScript. */
+.theme-icon-sun {
+  display: none;
+}
+
+.dark .theme-icon-sun {
+  display: block;
+}
+
+.dark .theme-icon-moon {
+  display: none;
+}
+
 @media (min-width: 768px) {
   :root {
     --gutter: 28px;
