@@ -30,11 +30,13 @@ export function validateRegister(body: Record<string, unknown>): {
   const name = clean(body.name, 80);
   const email = clean(body.email, 120).toLowerCase();
   const password = typeof body.password === "string" ? body.password : "";
+  const confirmPassword = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
 
   if (name.length < 2) errors.name = "Informe seu nome completo.";
   if (!isEmail(email)) errors.email = "E-mail inválido.";
   if (password.length < 8) errors.password = "A senha precisa de ao menos 8 caracteres.";
   else if (password.length > 100) errors.password = "Senha muito longa.";
+  if (confirmPassword !== password) errors.confirmPassword = "As senhas não coincidem.";
 
   if (Object.keys(errors).length) return { errors };
   return { data: { name, email, password }, errors };

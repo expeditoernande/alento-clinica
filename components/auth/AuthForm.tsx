@@ -28,7 +28,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const next = params.get("next") || "/minha-conta";
   const text = copy[mode];
 
-  const [values, setValues] = useState({ name: "", email: "", password: "" });
+  const [values, setValues] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
@@ -38,9 +38,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setPending(true);
     setErrors({});
     setMessage("");
+
+    if (mode === "criar" && values.password !== values.confirmPassword) {
+      setErrors({ confirmPassword: "As senhas não coincidem." });
+      setMessage("Confira as senhas informadas.");
+      return;
+    }
+
+    setPending(true);
 
     try {
       const response = await fetch(text.endpoint, {
@@ -140,6 +147,26 @@ export function AuthForm({ mode }: { mode: Mode }) {
           />
           {errors.password && <p className="field-error">{errors.password}</p>}
         </div>
+
+        {mode === "criar" && (
+          <div>
+            <label className="label" htmlFor="confirmPassword">
+              Confirmar senha
+            </label>
+            <input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              className="field mt-2"
+              autoComplete="new-password"
+              value={values.confirmPassword}
+              onChange={update("confirmPassword")}
+              aria-invalid={Boolean(errors.confirmPassword)}
+              placeholder="Repita a senha"
+            />
+            {errors.confirmPassword && <p className="field-error">{errors.confirmPassword}</p>}
+          </div>
+        )}
 
         {message && <div className="notice notice-error">{message}</div>}
 

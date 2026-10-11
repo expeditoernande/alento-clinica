@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { registerUser } from "@/lib/auth";
+import { sendWelcomeEmail } from "@/lib/email";
 import { clientKey, isBot, rateLimit, validateRegister } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -41,6 +42,8 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  await sendWelcomeEmail({ name: data.name, email: data.email }).catch(() => undefined);
 
   return NextResponse.json({ ok: true, user: result.user }, { status: 201 });
 }

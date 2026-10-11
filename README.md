@@ -42,6 +42,12 @@ Copie `.env.example` para `.env.local`:
 | `POSTGRES_URL`   | produção          | String de conexão do Postgres. Sem ela, usa arquivo/memória. |
 | `SESSION_SECRET` | produção          | Reservado para assinar sessões em múltiplas instâncias.      |
 | `SITE_URL`       | recomendada       | URL pública do site (metadata, sitemap, robots).             |
+| `ADMIN_EMAILS`   | opcional          | E-mails com acesso ao painel `/admin` (separados por vírgula). |
+| `RESEND_API_KEY` | opcional          | Chave do Resend para enviar e-mails (boas-vindas etc.).      |
+| `EMAIL_FROM`     | opcional          | Remetente dos e-mails (ex.: `ALENTO <contato@seudominio>`).  |
+
+> Sem `RESEND_API_KEY`, o cadastro funciona normalmente e o envio de e-mail é apenas ignorado
+> (registrado em log) — nada quebra.
 
 > No dev, sem `POSTGRES_URL`, tudo funciona com o arquivo local — inclusive o login, pois a
 > sessão fica na tabela/arquivo `sessions`.
