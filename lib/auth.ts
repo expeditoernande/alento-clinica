@@ -46,7 +46,11 @@ function expiryDate() {
   return new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
 }
 
-export async function registerUser(input: { name: string; email: string; password: string }) {
+export async function registerUser(
+  input: { name: string; email: string; password: string },
+  options?: { autoVerify?: boolean },
+) {
+  const autoVerify = options?.autoVerify ?? true;
   const passwordHash = await hashPassword(input.password);
   const user: StoredUser = {
     id: randomUUID(),
@@ -55,13 +59,16 @@ export async function registerUser(input: { name: string; email: string; passwor
     phone: "",
     role: "patient",
     psychologistSlug: null,
+    emailVerified: autoVerify,
+    verifyToken: null,
+    verifyTokenExpires: null,
     passwordHash,
     createdAt: new Date().toISOString(),
   };
   const result = await createUser(user);
   if (!result.ok) return { ok: false as const, duplicate: Boolean(result.duplicate) };
-  await startSession(user.id);
-  return { ok: true as const, user: toPublic(user) };
+  if (autoVerify) await startSession(user.id);
+  return { ok: true as const, user: toPublic(user), stored: user, requiresVerification: !autoVerify };
 }
 
 export async function authenticate(email: string, password: string) {
@@ -69,8 +76,11 @@ export async function authenticate(email: string, password: string) {
   if (!user) return { ok: false as const };
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) return { ok: false as const };
-  await startSession(user.id);
-  return { ok: true as const, user: toPublic(user) };
+  return { ok: true as const, user: toPublic(user), stored: user };
+}
+
+export function verificationPending(user: StoredUser): boolean {
+  return !user.emailVerified && user.verifyToken !== null;
 }
 
 export async function startSession(userId: string) {

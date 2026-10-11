@@ -32,9 +32,30 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState<{ email: string; message: string } | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
 
   const update = (field: keyof typeof values) => (event: React.ChangeEvent<HTMLInputElement>) =>
     setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  async function resend() {
+    if (!notice) return;
+    setResending(true);
+    setResent(false);
+    try {
+      await fetch("/api/auth/verify/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: notice.email, website: "" }),
+      });
+      setResent(true);
+    } catch {
+      setResent(false);
+    } finally {
+      setResending(false);
+    }
+  }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -59,7 +80,19 @@ export function AuthForm({ mode }: { mode: Mode }) {
         ok: boolean;
         errors?: FieldErrors;
         message?: string;
+        requiresVerification?: boolean;
+        needsVerification?: boolean;
       };
+
+      if (data.requiresVerification || data.needsVerification) {
+        setNotice({
+          email: values.email,
+          message:
+            data.message ??
+            "Enviamos um link de confirmação para o seu e-mail. Confirme para ativar a conta.",
+        });
+        return;
+      }
 
       if (!response.ok || !data.ok) {
         setErrors(data.errors ?? {});
@@ -74,6 +107,47 @@ export function AuthForm({ mode }: { mode: Mode }) {
     } finally {
       setPending(false);
     }
+  }
+
+  if (notice) {
+    return (
+      <div className="w-full max-w-md">
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-sage-soft text-sage">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M3.5 7.5l8.5 6 8.5-6M4.5 6h15a1 1 0 011 1v10a1 1 0 01-1 1h-15a1 1 0 01-1-1V7a1 1 0 011-1z"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+        <h1 className="display mt-5 text-[clamp(1.9rem,4vw,2.6rem)] text-ink">
+          Confirme seu e-mail
+        </h1>
+        <p className="lede mt-3">{notice.message}</p>
+        <p className="mt-2 text-[13px] text-graphite">
+          Enviamos para <strong className="text-ink">{notice.email}</strong>. Verifique também a
+          caixa de spam.
+        </p>
+
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={resend}
+            disabled={resending}
+          >
+            {resending ? "Reenviando…" : "Reenviar e-mail"}
+          </button>
+          <Link href="/entrar" className="link-sage text-[13px] text-ink">
+            Já confirmei, entrar
+          </Link>
+        </div>
+        {resent && <div className="notice mt-5 !text-sage">Pronto, reenviamos o link.</div>}
+      </div>
+    );
   }
 
   return (

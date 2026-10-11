@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authenticate } from "@/lib/auth";
+import { authenticate, startSession, verificationPending } from "@/lib/auth";
 import { clientKey, isBot, rateLimit, validateLogin } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -35,5 +35,17 @@ export async function POST(request: Request) {
     );
   }
 
+  if (verificationPending(result.stored)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        needsVerification: true,
+        message: "Confirme seu e-mail para entrar. Enviamos um link para você.",
+      },
+      { status: 403 },
+    );
+  }
+
+  await startSession(result.stored.id);
   return NextResponse.json({ ok: true, user: result.user });
 }

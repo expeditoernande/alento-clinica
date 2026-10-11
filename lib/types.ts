@@ -5,6 +5,9 @@ export type StoredUser = {
   phone: string;
   role: Role;
   psychologistSlug: string | null;
+  emailVerified: boolean;
+  verifyToken: string | null;
+  verifyTokenExpires: string | null;
   passwordHash: string;
   createdAt: string;
 };

@@ -46,10 +46,13 @@ export async function sendEmail({ to, subject, html, text }: SendInput): Promise
   }
 }
 
-export async function sendWelcomeEmail(user: { name: string; email: string }): Promise<SendResult> {
+export async function sendVerificationEmail(
+  user: { name: string; email: string },
+  token: string,
+): Promise<SendResult> {
   const firstName = user.name.trim().split(/\s+/)[0] || user.name;
   const accountUrl = `${siteUrl()}/minha-conta`;
-  const bookUrl = `${siteUrl()}/agendar`;
+  const verifyUrl = `${siteUrl()}/verificar-email?token=${encodeURIComponent(token)}`;
 
   const html = `
   <div style="background:#f5f3ee;padding:32px 0;font-family:Arial,Helvetica,sans-serif;color:#1c1d1b">
@@ -60,23 +63,21 @@ export async function sendWelcomeEmail(user: { name: string; email: string }): P
       <div style="padding:32px">
         <h1 style="margin:0 0 12px;font-size:22px;color:#1c1d1b">Que bom ter você, ${firstName}!</h1>
         <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#54564f">
-          Sua conta na ALENTO foi criada com sucesso. A partir de agora você pode agendar
-          sessões, acompanhar seus horários e conversar com nossos psicólogos.
+          Sua conta na ALENTO foi criada. Para ativá-la e começar a agendar sessões,
+          confirme que este e-mail é seu clicando no botão abaixo.
         </p>
-        <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#54564f">
-          Seu e-mail de acesso é <strong>${user.email}</strong>. Trate esta mensagem com cuidado
-          e não compartilhe sua senha com ninguém.
-        </p>
-        <a href="${bookUrl}" style="display:inline-block;background:#4d6b52;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:999px;font-size:14px">
-          Agendar minha primeira sessão
+        <a href="${verifyUrl}" style="display:inline-block;background:#4d6b52;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:999px;font-size:14px">
+          Confirmar meu e-mail
         </a>
         <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#8a8b83">
-          Acesse sua conta a qualquer momento em <a href="${accountUrl}" style="color:#4d6b52">${accountUrl}</a>.
+          O link expira em 24 horas. Se o botão não funcionar, copie e cole este endereço:<br />
+          <a href="${verifyUrl}" style="color:#4d6b52;word-break:break-all">${verifyUrl}</a>
         </p>
       </div>
       <div style="padding:20px 32px;background:#faf9f6;font-size:12px;line-height:1.6;color:#8a8b83">
         Você recebeu este e-mail porque criou uma conta na ALENTO — clínica de psicologia.<br />
-        Se não foi você, ignore esta mensagem.
+        Se não foi você, ignore esta mensagem. Acesse sua conta em
+        <a href="${accountUrl}" style="color:#4d6b52">${accountUrl}</a>.
       </div>
     </div>
   </div>`;
@@ -84,14 +85,12 @@ export async function sendWelcomeEmail(user: { name: string; email: string }): P
   const text = [
     `Que bom ter você, ${firstName}!`,
     "",
-    "Sua conta na ALENTO foi criada com sucesso.",
-    `Seu e-mail de acesso é ${user.email}.`,
+    "Sua conta na ALENTO foi criada.",
+    "Confirme seu e-mail para ativá-la:",
+    verifyUrl,
     "",
-    `Agende sua primeira sessão: ${bookUrl}`,
-    `Acesse sua conta: ${accountUrl}`,
-    "",
-    "Se não foi você, ignore esta mensagem.",
+    "O link expira em 24 horas. Se não foi você, ignore esta mensagem.",
   ].join("\n");
 
-  return sendEmail({ to: user.email, subject: "Sua conta na ALENTO foi criada", html, text });
+  return sendEmail({ to: user.email, subject: "Confirme seu e-mail na ALENTO", html, text });
 }

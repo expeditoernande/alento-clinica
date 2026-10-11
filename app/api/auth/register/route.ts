@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { registerUser } from "@/lib/auth";
-import { sendWelcomeEmail } from "@/lib/email";
+import { emailConfigured } from "@/lib/email";
+import { issueVerification } from "@/lib/verification";
 import { clientKey, isBot, rateLimit, validateRegister } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, errors }, { status: 422 });
   }
 
-  const result = await registerUser(data);
+  const verifyRequired = emailConfigured();
+  const result = await registerUser(data, { autoVerify: !verifyRequired });
   if (!result.ok) {
     if (result.duplicate) {
       return NextResponse.json(
@@ -43,7 +45,13 @@ export async function POST(request: Request) {
     );
   }
 
-  await sendWelcomeEmail({ name: data.name, email: data.email }).catch(() => undefined);
+  if (result.requiresVerification) {
+    await issueVerification({ id: result.stored.id, name: data.name, email: data.email });
+    return NextResponse.json(
+      { ok: true, user: result.user, requiresVerification: true },
+      { status: 201 },
+    );
+  }
 
   return NextResponse.json({ ok: true, user: result.user }, { status: 201 });
 }

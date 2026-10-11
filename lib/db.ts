@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS al_users (
   phone text NOT NULL DEFAULT '',
   role text NOT NULL DEFAULT 'patient',
   psychologist_slug text,
+  email_verified boolean NOT NULL DEFAULT false,
+  verify_token text,
+  verify_token_expires timestamptz,
   password_hash text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -27,6 +30,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS al_users_email_key ON al_users (lower(email));
 ALTER TABLE al_users ADD COLUMN IF NOT EXISTS phone text NOT NULL DEFAULT '';
 ALTER TABLE al_users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'patient';
 ALTER TABLE al_users ADD COLUMN IF NOT EXISTS psychologist_slug text;
+ALTER TABLE al_users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false;
+ALTER TABLE al_users ADD COLUMN IF NOT EXISTS verify_token text;
+ALTER TABLE al_users ADD COLUMN IF NOT EXISTS verify_token_expires timestamptz;
 
 CREATE TABLE IF NOT EXISTS al_sessions (
   token text PRIMARY KEY,
@@ -221,6 +227,9 @@ type UserRow = {
   phone: string;
   role: string;
   psychologist_slug: string | null;
+  email_verified: boolean;
+  verify_token: string | null;
+  verify_token_expires: string | null;
   password_hash: string;
   created_at: string;
 };
@@ -233,16 +242,24 @@ function mapUser(row: UserRow): StoredUser {
     phone: row.phone,
     role: (row.role === "psychologist" ? "psychologist" : "patient") as Role,
     psychologistSlug: row.psychologist_slug ?? null,
+    emailVerified: Boolean(row.email_verified),
+    verifyToken: row.verify_token ?? null,
+    verifyTokenExpires: row.verify_token_expires
+      ? new Date(row.verify_token_expires).toISOString()
+      : null,
     passwordHash: row.password_hash,
     createdAt: new Date(row.created_at).toISOString(),
   };
 }
 
+const USER_COLUMNS =
+  "id, name, email, phone, role, psychologist_slug, email_verified, verify_token, verify_token_expires, password_hash, created_at";
+
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
   const normalized = email.trim().toLowerCase();
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
-      "SELECT id, name, email, phone, role, psychologist_slug, password_hash, created_at FROM al_users WHERE lower(email) = $1",
+      `SELECT ${USER_COLUMNS} FROM al_users WHERE lower(email) = $1`,
       [normalized],
     );
     const row = result.rows[0];
@@ -257,10 +274,7 @@ export async function findUserByEmail(email: string): Promise<StoredUser | null>
 
 export async function findUserById(id: string): Promise<StoredUser | null> {
   const viaPg = await withClient(async (client) => {
-    const result = await client.query(
-      "SELECT id, name, email, phone, role, psychologist_slug, password_hash, created_at FROM al_users WHERE id = $1",
-      [id],
-    );
+    const result = await client.query(`SELECT ${USER_COLUMNS} FROM al_users WHERE id = $1`, [id]);
     const row = result.rows[0];
     if (!row) return null;
     return mapUser(row as UserRow);
@@ -274,8 +288,9 @@ export async function findUserById(id: string): Promise<StoredUser | null> {
 export async function createUser(user: StoredUser): Promise<{ ok: boolean; duplicate?: boolean }> {
   const viaPg = await withClient(async (client) => {
     const inserted = await client.query(
-      `INSERT INTO al_users (id, name, email, phone, role, psychologist_slug, password_hash, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO al_users
+         (id, name, email, phone, role, psychologist_slug, email_verified, verify_token, verify_token_expires, password_hash, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT ((lower(email))) DO NOTHING`,
       [
         user.id,
@@ -284,6 +299,9 @@ export async function createUser(user: StoredUser): Promise<{ ok: boolean; dupli
         user.phone,
         user.role,
         user.psychologistSlug,
+        user.emailVerified,
+        user.verifyToken,
+        user.verifyTokenExpires,
         user.passwordHash,
         user.createdAt,
       ],
@@ -376,7 +394,9 @@ export async function createSession(token: string, userId: string, expiresAt: st
 export async function findSessionUser(token: string): Promise<StoredUser | null> {
   const viaPg = await withClient(async (client) => {
     const result = await client.query(
-      `SELECT u.id, u.name, u.email, u.phone, u.role, u.psychologist_slug, u.password_hash, u.created_at
+      `SELECT ${USER_COLUMNS.split(", ")
+        .map((column) => `u.${column}`)
+        .join(", ")}
        FROM al_sessions s
        JOIN al_users u ON u.id = s.user_id
        WHERE s.token = $1 AND s.expires_at > now()`,
@@ -706,6 +726,54 @@ export async function updateUserRole(
   if (!user) return false;
   user.role = role;
   user.psychologistSlug = psychologistSlug;
+  await writeLocal(data);
+  return true;
+}
+
+export async function setVerificationToken(
+  userId: string,
+  token: string,
+  expiresISO: string,
+): Promise<void> {
+  const viaPg = await withClient(async (client) => {
+    await client.query(
+      "UPDATE al_users SET verify_token = $2, verify_token_expires = $3 WHERE id = $1",
+      [userId, token, expiresISO],
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return;
+
+  const data = await readLocal();
+  const user = data.users.find((item) => item.id === userId);
+  if (!user) return;
+  user.verifyToken = token;
+  user.verifyTokenExpires = expiresISO;
+  await writeLocal(data);
+}
+
+export async function consumeVerificationToken(token: string): Promise<boolean> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      `UPDATE al_users
+       SET email_verified = true, verify_token = NULL, verify_token_expires = NULL
+       WHERE verify_token = $1 AND verify_token_expires > now()`,
+      [token],
+    );
+    return (result.rowCount ?? 0) > 0;
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg ?? false;
+
+  const data = await readLocal();
+  const user = data.users.find(
+    (item) =>
+      item.verifyToken === token &&
+      item.verifyTokenExpires !== null &&
+      new Date(item.verifyTokenExpires).getTime() > Date.now(),
+  );
+  if (!user) return false;
+  user.emailVerified = true;
+  user.verifyToken = null;
+  user.verifyTokenExpires = null;
   await writeLocal(data);
   return true;
 }
