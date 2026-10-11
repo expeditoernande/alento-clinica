@@ -43,11 +43,12 @@ Copie `.env.example` para `.env.local`:
 | `SESSION_SECRET` | produção          | Reservado para assinar sessões em múltiplas instâncias.      |
 | `SITE_URL`       | recomendada       | URL pública do site (metadata, sitemap, robots).             |
 | `ADMIN_EMAILS`   | opcional          | E-mails com acesso ao painel `/admin` (separados por vírgula). |
-| `RESEND_API_KEY` | opcional          | Chave do Resend para enviar e-mails (boas-vindas etc.).      |
+| `RESEND_API_KEY` | opcional          | Chave do Resend para enviar e-mails (verificação, redefinição etc.). |
 | `EMAIL_FROM`     | opcional          | Remetente dos e-mails (ex.: `ALENTO <contato@seudominio>`).  |
 
-> Sem `RESEND_API_KEY`, o cadastro funciona normalmente e o envio de e-mail é apenas ignorado
-> (registrado em log) — nada quebra.
+> Sem `RESEND_API_KEY`, o cadastro funciona normalmente (a conta é verificada automaticamente) e
+> o envio de e-mail é apenas ignorado (registrado em log) — nada quebra. As telas de confirmação
+> de e-mail e de recuperação de senha ficam inertes até a chave ser configurada.
 
 > No dev, sem `POSTGRES_URL`, tudo funciona com o arquivo local — inclusive o login, pois a
 > sessão fica na tabela/arquivo `sessions`.
@@ -66,9 +67,12 @@ npm run lint     # ESLint
 | Método | Rota                        | Descrição                                  |
 | ------ | --------------------------- | ------------------------------------------ |
 | GET    | `/api/health`               | Status e backend de armazenamento          |
-| POST   | `/api/auth/register`        | Cria conta de cliente e inicia sessão      |
+| POST   | `/api/auth/register`        | Cria conta de cliente                        |
 | POST   | `/api/auth/login`           | Autentica por e-mail e senha               |
 | POST   | `/api/auth/logout`          | Encerra a sessão                           |
+| POST   | `/api/auth/verify/resend`   | Reenvia o e-mail de confirmação            |
+| POST   | `/api/auth/forgot-password` | Envia link de redefinição de senha         |
+| POST   | `/api/auth/reset-password`  | Redefine a senha usando o token do link    |
 | GET    | `/api/appointments`         | Lista as consultas do cliente (auth)       |
 | POST   | `/api/appointments`         | Cria um agendamento (auth)                 |
 | DELETE | `/api/appointments/:id`     | Cancela um agendamento (auth)              |

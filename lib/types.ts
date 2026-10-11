@@ -8,6 +8,8 @@ export type StoredUser = {
   emailVerified: boolean;
   verifyToken: string | null;
   verifyTokenExpires: string | null;
+  resetToken: string | null;
+  resetTokenExpires: string | null;
   passwordHash: string;
   createdAt: string;
 };

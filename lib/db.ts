@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS al_users (
   email_verified boolean NOT NULL DEFAULT false,
   verify_token text,
   verify_token_expires timestamptz,
+  reset_token text,
+  reset_token_expires timestamptz,
   password_hash text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -33,6 +35,8 @@ ALTER TABLE al_users ADD COLUMN IF NOT EXISTS psychologist_slug text;
 ALTER TABLE al_users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false;
 ALTER TABLE al_users ADD COLUMN IF NOT EXISTS verify_token text;
 ALTER TABLE al_users ADD COLUMN IF NOT EXISTS verify_token_expires timestamptz;
+ALTER TABLE al_users ADD COLUMN IF NOT EXISTS reset_token text;
+ALTER TABLE al_users ADD COLUMN IF NOT EXISTS reset_token_expires timestamptz;
 
 CREATE TABLE IF NOT EXISTS al_sessions (
   token text PRIMARY KEY,
@@ -230,6 +234,8 @@ type UserRow = {
   email_verified: boolean;
   verify_token: string | null;
   verify_token_expires: string | null;
+  reset_token: string | null;
+  reset_token_expires: string | null;
   password_hash: string;
   created_at: string;
 };
@@ -247,13 +253,17 @@ function mapUser(row: UserRow): StoredUser {
     verifyTokenExpires: row.verify_token_expires
       ? new Date(row.verify_token_expires).toISOString()
       : null,
+    resetToken: row.reset_token ?? null,
+    resetTokenExpires: row.reset_token_expires
+      ? new Date(row.reset_token_expires).toISOString()
+      : null,
     passwordHash: row.password_hash,
     createdAt: new Date(row.created_at).toISOString(),
   };
 }
 
 const USER_COLUMNS =
-  "id, name, email, phone, role, psychologist_slug, email_verified, verify_token, verify_token_expires, password_hash, created_at";
+  "id, name, email, phone, role, psychologist_slug, email_verified, verify_token, verify_token_expires, reset_token, reset_token_expires, password_hash, created_at";
 
 export async function findUserByEmail(email: string): Promise<StoredUser | null> {
   const normalized = email.trim().toLowerCase();
@@ -289,8 +299,8 @@ export async function createUser(user: StoredUser): Promise<{ ok: boolean; dupli
   const viaPg = await withClient(async (client) => {
     const inserted = await client.query(
       `INSERT INTO al_users
-         (id, name, email, phone, role, psychologist_slug, email_verified, verify_token, verify_token_expires, password_hash, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         (id, name, email, phone, role, psychologist_slug, email_verified, verify_token, verify_token_expires, reset_token, reset_token_expires, password_hash, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT ((lower(email))) DO NOTHING`,
       [
         user.id,
@@ -302,6 +312,8 @@ export async function createUser(user: StoredUser): Promise<{ ok: boolean; dupli
         user.emailVerified,
         user.verifyToken,
         user.verifyTokenExpires,
+        user.resetToken,
+        user.resetTokenExpires,
         user.passwordHash,
         user.createdAt,
       ],
@@ -776,6 +788,76 @@ export async function consumeVerificationToken(token: string): Promise<boolean> 
   user.verifyTokenExpires = null;
   await writeLocal(data);
   return true;
+}
+
+export async function setResetToken(
+  userId: string,
+  token: string,
+  expiresISO: string,
+): Promise<void> {
+  const viaPg = await withClient(async (client) => {
+    await client.query(
+      "UPDATE al_users SET reset_token = $2, reset_token_expires = $3 WHERE id = $1",
+      [userId, token, expiresISO],
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return;
+
+  const data = await readLocal();
+  const user = data.users.find((item) => item.id === userId);
+  if (!user) return;
+  user.resetToken = token;
+  user.resetTokenExpires = expiresISO;
+  await writeLocal(data);
+}
+
+/**
+ * Consome um token de redefinição válido: troca a senha, marca o e-mail como
+ * verificado (receber o link prova a posse do e-mail) e invalida o token.
+ * Retorna o id do usuário em caso de sucesso, ou null.
+ */
+export async function consumeResetToken(
+  token: string,
+  passwordHash: string,
+): Promise<string | null> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      `UPDATE al_users
+       SET password_hash = $2, email_verified = true,
+           reset_token = NULL, reset_token_expires = NULL
+       WHERE reset_token = $1 AND reset_token_expires > now()
+       RETURNING id`,
+      [token, passwordHash],
+    );
+    return (result.rows[0]?.id as string | undefined) ?? null;
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg;
+
+  const data = await readLocal();
+  const user = data.users.find(
+    (item) =>
+      item.resetToken === token &&
+      item.resetTokenExpires !== null &&
+      new Date(item.resetTokenExpires).getTime() > Date.now(),
+  );
+  if (!user) return null;
+  user.passwordHash = passwordHash;
+  user.emailVerified = true;
+  user.resetToken = null;
+  user.resetTokenExpires = null;
+  await writeLocal(data);
+  return user.id;
+}
+
+export async function deleteSessionsForUser(userId: string): Promise<void> {
+  const viaPg = await withClient(async (client) => {
+    await client.query("DELETE FROM al_sessions WHERE user_id = $1", [userId]);
+  });
+  if (viaPg !== null || storageKind() === "postgres") return;
+
+  const data = await readLocal();
+  data.sessions = data.sessions.filter((session) => session.userId !== userId);
+  await writeLocal(data);
 }
 
 export async function listRecentAppointments(limit = 50): Promise<AdminAppointment[]> {

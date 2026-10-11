@@ -55,6 +55,33 @@ export function validateLogin(body: Record<string, unknown>): {
   return { data: { email, password }, errors };
 }
 
+export function validateForgotPassword(body: Record<string, unknown>): {
+  data?: { email: string };
+  errors: FieldErrors;
+} {
+  const errors: FieldErrors = {};
+  const email = clean(body.email, 120).toLowerCase();
+  if (!isEmail(email)) errors.email = "E-mail inválido.";
+  if (Object.keys(errors).length) return { errors };
+  return { data: { email }, errors };
+}
+
+export function validateResetPassword(body: Record<string, unknown>): {
+  data?: { password: string };
+  errors: FieldErrors;
+} {
+  const errors: FieldErrors = {};
+  const password = typeof body.password === "string" ? body.password : "";
+  const confirmPassword = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
+
+  if (password.length < 8) errors.password = "A senha precisa de ao menos 8 caracteres.";
+  else if (password.length > 100) errors.password = "Senha muito longa.";
+  if (confirmPassword !== password) errors.confirmPassword = "As senhas não coincidem.";
+
+  if (Object.keys(errors).length) return { errors };
+  return { data: { password }, errors };
+}
+
 export type ProfileInput = { email: string; phone: string };
 
 export function validateProfile(body: Record<string, unknown>): {

@@ -1,9 +1,11 @@
 import { randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import {
+  consumeResetToken,
   createSession,
   createUser,
   deleteSession,
+  deleteSessionsForUser,
   findSessionUser,
   findUserByEmail,
   findUserById,
@@ -62,6 +64,8 @@ export async function registerUser(
     emailVerified: autoVerify,
     verifyToken: null,
     verifyTokenExpires: null,
+    resetToken: null,
+    resetTokenExpires: null,
     passwordHash,
     createdAt: new Date().toISOString(),
   };
@@ -81,6 +85,21 @@ export async function authenticate(email: string, password: string) {
 
 export function verificationPending(user: StoredUser): boolean {
   return !user.emailVerified && user.verifyToken !== null;
+}
+
+/**
+ * Redefine a senha a partir de um token válido. Marca o e-mail como verificado
+ * e encerra todas as sessões ativas do usuário. Retorna o id em caso de sucesso.
+ */
+export async function resetPasswordWithToken(
+  token: string,
+  newPassword: string,
+): Promise<{ ok: true; userId: string } | { ok: false }> {
+  const passwordHash = await hashPassword(newPassword);
+  const userId = await consumeResetToken(token, passwordHash);
+  if (!userId) return { ok: false };
+  await deleteSessionsForUser(userId);
+  return { ok: true, userId };
 }
 
 export async function startSession(userId: string) {

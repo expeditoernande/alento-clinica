@@ -94,3 +94,51 @@ export async function sendVerificationEmail(
 
   return sendEmail({ to: user.email, subject: "Confirme seu e-mail na ALENTO", html, text });
 }
+
+export async function sendPasswordResetEmail(
+  user: { name: string; email: string },
+  token: string,
+): Promise<SendResult> {
+  const firstName = user.name.trim().split(/\s+/)[0] || user.name;
+  const resetUrl = `${siteUrl()}/redefinir-senha?token=${encodeURIComponent(token)}`;
+
+  const html = `
+  <div style="background:#f5f3ee;padding:32px 0;font-family:Arial,Helvetica,sans-serif;color:#1c1d1b">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden">
+      <div style="padding:28px 32px;border-bottom:1px solid #e6e2d9">
+        <p style="margin:0;font-size:20px;letter-spacing:2px;color:#4d6b52">ALENTO</p>
+      </div>
+      <div style="padding:32px">
+        <h1 style="margin:0 0 12px;font-size:22px;color:#1c1d1b">Redefinir sua senha</h1>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#54564f">
+          Olá, ${firstName}. Recebemos um pedido para redefinir a senha da sua conta na ALENTO.
+          Se foi você, clique no botão abaixo para criar uma nova senha.
+        </p>
+        <a href="${resetUrl}" style="display:inline-block;background:#4d6b52;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:999px;font-size:14px">
+          Criar nova senha
+        </a>
+        <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#8a8b83">
+          O link expira em 1 hora e só pode ser usado uma vez. Se o botão não funcionar,
+          copie e cole este endereço:<br />
+          <a href="${resetUrl}" style="color:#4d6b52;word-break:break-all">${resetUrl}</a>
+        </p>
+      </div>
+      <div style="padding:20px 32px;background:#faf9f6;font-size:12px;line-height:1.6;color:#8a8b83">
+        Se você não pediu para redefinir a senha, ignore este e-mail — sua senha continua a mesma.
+      </div>
+    </div>
+  </div>`;
+
+  const text = [
+    "Redefinir sua senha",
+    "",
+    `Olá, ${firstName}. Recebemos um pedido para redefinir a senha da sua conta na ALENTO.`,
+    "Se foi você, acesse o link abaixo para criar uma nova senha:",
+    resetUrl,
+    "",
+    "O link expira em 1 hora e só pode ser usado uma vez.",
+    "Se não foi você, ignore este e-mail — sua senha continua a mesma.",
+  ].join("\n");
+
+  return sendEmail({ to: user.email, subject: "Redefinir sua senha na ALENTO", html, text });
+}

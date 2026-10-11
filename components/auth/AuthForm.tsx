@@ -205,9 +205,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
         </div>
 
         <div>
-          <label className="label" htmlFor="password">
-            Senha
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="label" htmlFor="password">
+              Senha
+            </label>
+            {mode === "entrar" && (
+              <Link href="/esqueci-senha" className="link-sage text-[12px] text-graphite">
+                Esqueci minha senha
+              </Link>
+            )}
+          </div>
           <input
             id="password"
             name="password"
