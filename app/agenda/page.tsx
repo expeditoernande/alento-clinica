@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicShell } from "@/components/site/PublicShell";
 import { AvailabilityEditor } from "@/components/agenda/AvailabilityEditor";
+import { GoogleCalendarCard } from "@/components/agenda/GoogleCalendarCard";
 import { currentPsychologistSlug } from "@/lib/auth";
-import { listBlocks, listWeeklyWindows } from "@/lib/db";
+import { getGoogleAccount, listBlocks, listWeeklyWindows } from "@/lib/db";
+import { googleConfigured } from "@/lib/google";
 import { psychologists } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -12,12 +14,23 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function AgendaPage() {
+export default async function AgendaPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const slug = await currentPsychologistSlug();
   if (!slug) notFound();
 
+  const params = await searchParams;
+  const googleNotice = typeof params.google === "string" ? params.google : "";
+
   const person = psychologists.find((item) => item.slug === slug);
-  const [windows, blocks] = await Promise.all([listWeeklyWindows(slug), listBlocks(slug)]);
+  const [windows, blocks, account] = await Promise.all([
+    listWeeklyWindows(slug),
+    listBlocks(slug),
+    getGoogleAccount(slug),
+  ]);
 
   return (
     <PublicShell>
@@ -34,7 +47,13 @@ export default async function AgendaPage() {
       </section>
 
       <section className="section pt-12 md:pt-14">
-        <div className="shell">
+        <div className="shell space-y-10">
+          <GoogleCalendarCard
+            configured={googleConfigured()}
+            connected={Boolean(account)}
+            email={account?.email ?? ""}
+            notice={googleNotice}
+          />
           <AvailabilityEditor initialWindows={windows} initialBlocks={blocks} />
         </div>
       </section>

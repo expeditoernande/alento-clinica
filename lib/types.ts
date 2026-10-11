@@ -73,3 +73,15 @@ export type AvailabilityBlock = {
   reason: string;
   createdAt: string;
 };
+
+export type GoogleAccount = {
+  psychologistSlug: string;
+  googleSub: string | null;
+  email: string;
+  refreshToken: string | null;
+  accessToken: string | null;
+  accessTokenExpires: string | null;
+  scopes: string;
+  calendarId: string;
+  connectedAt: string;
+};

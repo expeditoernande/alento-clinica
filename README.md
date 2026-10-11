@@ -45,6 +45,9 @@ Copie `.env.example` para `.env.local`:
 | `ADMIN_EMAILS`   | opcional          | E-mails com acesso ao painel `/admin` (separados por vírgula). |
 | `RESEND_API_KEY` | opcional          | Chave do Resend para enviar e-mails (verificação, redefinição etc.). |
 | `EMAIL_FROM`     | opcional          | Remetente dos e-mails (ex.: `ALENTO <contato@seudominio>`).  |
+| `GOOGLE_CLIENT_ID` | opcional        | Client ID do OAuth do Google Calendar (por psicólogo).       |
+| `GOOGLE_CLIENT_SECRET` | opcional    | Client Secret do OAuth do Google Calendar.                   |
+| `GOOGLE_REDIRECT_URI` | opcional      | Redirecionamento OAuth (padrão: `SITE_URL/api/integrations/google/callback`). |
 
 > Sem `RESEND_API_KEY`, o cadastro funciona normalmente (a conta é verificada automaticamente) e
 > o envio de e-mail é apenas ignorado (registrado em log) — nada quebra. As telas de confirmação
@@ -73,12 +76,37 @@ npm run lint     # ESLint
 | POST   | `/api/auth/verify/resend`   | Reenvia o e-mail de confirmação            |
 | POST   | `/api/auth/forgot-password` | Envia link de redefinição de senha         |
 | POST   | `/api/auth/reset-password`  | Redefine a senha usando o token do link    |
+| GET    | `/api/integrations/google/connect`    | Inicia o OAuth do Google (psicólogo)  |
+| GET    | `/api/integrations/google/callback`   | Recebe o retorno do OAuth e guarda tokens |
+| GET    | `/api/integrations/google/status`     | Estado da conexão Google (auth)       |
+| POST   | `/api/integrations/google/disconnect` | Remove a conexão com o Google (auth)  |
 | GET    | `/api/appointments`         | Lista as consultas do cliente (auth)       |
 | POST   | `/api/appointments`         | Cria um agendamento (auth)                 |
 | DELETE | `/api/appointments/:id`     | Cancela um agendamento (auth)              |
 | POST   | `/api/applications`         | Registra currículo de psicólogo            |
 
 Todas as rotas de escrita têm limitação de taxa e honeypot (`website`).
+
+## Integração com o Google Agenda
+
+Cada psicólogo pode conectar a própria conta Google em **Minha agenda → Google Agenda**.
+
+1. No [Google Cloud Console](https://console.cloud.google.com/), crie um projeto e ative a
+   **Google Calendar API**.
+2. Em *Credenciais*, crie um **ID do cliente OAuth** do tipo *Aplicativo da Web* e cadastre a
+   URI de redirecionamento autorizada:
+   `https://SEU-DOMINIO/api/integrations/google/callback`
+3. Defina `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` (e, se quiser, `GOOGLE_REDIRECT_URI`).
+4. Na tela OAuth consent, adicione os escopos `calendar.events` e `calendar.readonly`.
+
+Escopos usados: `calendar.events` (ler/criar/remover eventos) e `calendar.readonly` (free/busy),
+com `access_type=offline` para receber o *refresh token*. Os tokens ficam na tabela
+`al_google_accounts`, uma linha por psicólogo, e o `access_token` é renovado automaticamente.
+
+> Sem `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, o cartão aparece como "integração indisponível" e
+> nada quebra. As funções `fetchGoogleBusy` (ler ocupados) e `createGoogleEvent`/`deleteGoogleEvent`
+> (criar/remover sessões) já estão prontas em `lib/google.ts` para serem ligadas ao cálculo de vagas
+> e ao fluxo de agendamento.
 
 ## Segurança
 

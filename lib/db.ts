@@ -4,6 +4,7 @@ import type {
   AdminAppointment,
   AdminUser,
   AvailabilityBlock,
+  GoogleAccount,
   Role,
   StoredApplication,
   StoredAppointment,
@@ -99,6 +100,18 @@ CREATE TABLE IF NOT EXISTS al_availability_blocks (
 );
 CREATE INDEX IF NOT EXISTS al_availability_blocks_slug_idx
   ON al_availability_blocks (psychologist_slug, date);
+
+CREATE TABLE IF NOT EXISTS al_google_accounts (
+  psychologist_slug text PRIMARY KEY,
+  google_sub text,
+  email text NOT NULL DEFAULT '',
+  refresh_token text,
+  access_token text,
+  access_token_expires timestamptz,
+  scopes text NOT NULL DEFAULT '',
+  calendar_id text NOT NULL DEFAULT 'primary',
+  connected_at timestamptz NOT NULL DEFAULT now()
+);
 `;
 
 type LocalData = {
@@ -108,6 +121,7 @@ type LocalData = {
   applications: StoredApplication[];
   weekly: Array<{ id: string; slug: string; weekday: number; start: string; end: string }>;
   blocks: Array<AvailabilityBlock & { slug: string }>;
+  googleAccounts: GoogleAccount[];
 };
 
 type Global = typeof globalThis & {
@@ -120,7 +134,15 @@ const scope = globalThis as Global;
 const onVercel = Boolean(process.env.VERCEL);
 
 function emptyData(): LocalData {
-  return { users: [], sessions: [], appointments: [], applications: [], weekly: [], blocks: [] };
+  return {
+    users: [],
+    sessions: [],
+    appointments: [],
+    applications: [],
+    weekly: [],
+    blocks: [],
+    googleAccounts: [],
+  };
 }
 
 function connectionString() {
@@ -202,6 +224,7 @@ async function readLocal(): Promise<LocalData> {
       applications: parsed.applications ?? [],
       weekly: parsed.weekly ?? [],
       blocks: parsed.blocks ?? [],
+      googleAccounts: parsed.googleAccounts ?? [],
     };
   } catch {
     return emptyData();
@@ -857,6 +880,131 @@ export async function deleteSessionsForUser(userId: string): Promise<void> {
 
   const data = await readLocal();
   data.sessions = data.sessions.filter((session) => session.userId !== userId);
+  await writeLocal(data);
+}
+
+/* ------------------------------ integração Google Calendar ------------------------------ */
+
+type GoogleAccountRow = {
+  psychologist_slug: string;
+  google_sub: string | null;
+  email: string;
+  refresh_token: string | null;
+  access_token: string | null;
+  access_token_expires: string | null;
+  scopes: string;
+  calendar_id: string;
+  connected_at: string;
+};
+
+function mapGoogleAccount(row: GoogleAccountRow): GoogleAccount {
+  return {
+    psychologistSlug: row.psychologist_slug,
+    googleSub: row.google_sub ?? null,
+    email: row.email ?? "",
+    refreshToken: row.refresh_token ?? null,
+    accessToken: row.access_token ?? null,
+    accessTokenExpires: row.access_token_expires
+      ? new Date(row.access_token_expires).toISOString()
+      : null,
+    scopes: row.scopes ?? "",
+    calendarId: row.calendar_id || "primary",
+    connectedAt: new Date(row.connected_at).toISOString(),
+  };
+}
+
+export async function getGoogleAccount(slug: string): Promise<GoogleAccount | null> {
+  const viaPg = await withClient(async (client) => {
+    const result = await client.query(
+      `SELECT psychologist_slug, google_sub, email, refresh_token, access_token,
+              access_token_expires, scopes, calendar_id, connected_at
+       FROM al_google_accounts WHERE psychologist_slug = $1`,
+      [slug],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return mapGoogleAccount(row as GoogleAccountRow);
+  });
+  if (viaPg !== null || storageKind() === "postgres") return viaPg;
+
+  const data = await readLocal();
+  return data.googleAccounts.find((account) => account.psychologistSlug === slug) ?? null;
+}
+
+export async function saveGoogleAccount(account: GoogleAccount): Promise<void> {
+  const viaPg = await withClient(async (client) => {
+    await client.query(
+      `INSERT INTO al_google_accounts
+         (psychologist_slug, google_sub, email, refresh_token, access_token,
+          access_token_expires, scopes, calendar_id, connected_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (psychologist_slug) DO UPDATE SET
+         google_sub = EXCLUDED.google_sub,
+         email = EXCLUDED.email,
+         refresh_token = COALESCE(EXCLUDED.refresh_token, al_google_accounts.refresh_token),
+         access_token = EXCLUDED.access_token,
+         access_token_expires = EXCLUDED.access_token_expires,
+         scopes = EXCLUDED.scopes,
+         calendar_id = EXCLUDED.calendar_id,
+         connected_at = EXCLUDED.connected_at`,
+      [
+        account.psychologistSlug,
+        account.googleSub,
+        account.email,
+        account.refreshToken,
+        account.accessToken,
+        account.accessTokenExpires,
+        account.scopes,
+        account.calendarId,
+        account.connectedAt,
+      ],
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return;
+
+  const data = await readLocal();
+  const index = data.googleAccounts.findIndex(
+    (item) => item.psychologistSlug === account.psychologistSlug,
+  );
+  if (index >= 0) data.googleAccounts[index] = account;
+  else data.googleAccounts.push(account);
+  await writeLocal(data);
+}
+
+export async function updateGoogleTokens(
+  slug: string,
+  accessToken: string,
+  accessTokenExpires: string,
+  scopes?: string,
+): Promise<void> {
+  const viaPg = await withClient(async (client) => {
+    await client.query(
+      `UPDATE al_google_accounts
+       SET access_token = $2, access_token_expires = $3,
+           scopes = COALESCE($4, scopes)
+       WHERE psychologist_slug = $1`,
+      [slug, accessToken, accessTokenExpires, scopes ?? null],
+    );
+  });
+  if (viaPg !== null || storageKind() === "postgres") return;
+
+  const data = await readLocal();
+  const account = data.googleAccounts.find((item) => item.psychologistSlug === slug);
+  if (!account) return;
+  account.accessToken = accessToken;
+  account.accessTokenExpires = accessTokenExpires;
+  if (scopes) account.scopes = scopes;
+  await writeLocal(data);
+}
+
+export async function deleteGoogleAccount(slug: string): Promise<void> {
+  const viaPg = await withClient(async (client) => {
+    await client.query("DELETE FROM al_google_accounts WHERE psychologist_slug = $1", [slug]);
+  });
+  if (viaPg !== null || storageKind() === "postgres") return;
+
+  const data = await readLocal();
+  data.googleAccounts = data.googleAccounts.filter((item) => item.psychologistSlug !== slug);
   await writeLocal(data);
 }
 
