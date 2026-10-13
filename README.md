@@ -105,8 +105,31 @@ com `access_type=offline` para receber o *refresh token*. Os tokens ficam na tab
 
 > Sem `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, o cartão aparece como "integração indisponível" e
 > nada quebra. As funções `fetchGoogleBusy` (ler ocupados) e `createGoogleEvent`/`deleteGoogleEvent`
-> (criar/remover sessões) já estão prontas em `lib/google.ts` para serem ligadas ao cálculo de vagas
-> e ao fluxo de agendamento.
+> (criar/remover sessões) estão prontas em `lib/google.ts`.
+
+## Provedores de agenda
+
+Toda integração de agenda implementa a mesma interface `CalendarProvider`
+(`lib/calendar/types.ts`): `listBusy`, `createEvent` e `deleteEvent`. O resto do sistema fala só
+com essa interface, então trocar ou adicionar um provedor não exige retrabalho.
+
+| Provedor | Arquivo                 | Quando usar                                            |
+| -------- | ----------------------- | ------------------------------------------------------ |
+| `google` | `lib/calendar/google.ts` | Google Agenda via OAuth (padrão)                       |
+| `api`    | `lib/calendar/api.ts`    | API HTTP externa (ex.: agenda de um parceiro)          |
+| `mock`   | `lib/calendar/mock.ts`   | Desenvolvimento/teste, sem depender de API externa     |
+
+O provedor ativo vem de `AGENDA_PROVIDER` (`google`, `api` ou `mock`). Se não definido: usa `api`
+quando `AGENDA_API_URL` existir, senão `google`. O contrato esperado para a API externa está
+documentado em `.env.example` (`/busy`, `/events`).
+
+A leitura de ocupados já está ligada ao cálculo de vagas (`lib/availability.ts`): os horários
+ocupados na agenda externa são removidos da disponibilidade. Para testar sem nenhuma API real:
+
+```
+AGENDA_PROVIDER=mock
+AGENDA_MOCK_BUSY=[{"start":"2026-11-18T09:00:00-03:00","end":"2026-11-18T10:00:00-03:00"}]
+```
 
 ## Segurança
 

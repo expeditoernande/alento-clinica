@@ -1,12 +1,13 @@
+import { CLINIC_TIMEZONE } from "@/lib/calendar/types";
 import { getGoogleAccount, updateGoogleTokens } from "@/lib/db";
 import { siteUrl } from "@/lib/seo";
+
+export { CLINIC_TIMEZONE };
 
 const AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 const CALENDAR_BASE = "https://www.googleapis.com/calendar/v3";
-
-export const CLINIC_TIMEZONE = "America/Sao_Paulo";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",

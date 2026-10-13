@@ -1,5 +1,9 @@
+import { calendarBusy } from "@/lib/calendar";
+import { CLINIC_UTC_OFFSET, type BusyInterval } from "@/lib/calendar/types";
 import { listBlocks, listWeeklyWindows, takenSlots } from "@/lib/db";
 import { SESSION_SLOTS } from "@/lib/site";
+
+const SLOT_MINUTES = 60;
 
 export function weekdayOf(date: string): number {
   const parsed = new Date(`${date}T12:00:00Z`);
@@ -32,19 +36,38 @@ export function blockedSlotsFor(
   );
 }
 
+/** Marca como ocupado todo slot que colida com algum intervalo vindo da agenda externa. */
+export function busySlotsForDate(intervals: BusyInterval[], date: string): string[] {
+  const slotMs = SLOT_MINUTES * 60 * 1000;
+  return SESSION_SLOTS.filter((slot) => {
+    const start = new Date(`${date}T${slot}:00${CLINIC_UTC_OFFSET}`).getTime();
+    const end = start + slotMs;
+    return intervals.some((busy) => {
+      const busyStart = new Date(busy.start).getTime();
+      const busyEnd = new Date(busy.end).getTime();
+      if (Number.isNaN(busyStart) || Number.isNaN(busyEnd)) return false;
+      return busyStart < end && busyEnd > start;
+    });
+  });
+}
+
 export async function availableSlots(
   slug: string,
   date: string,
   excludeId?: string,
 ): Promise<string[]> {
-  const [windows, blocks, taken] = await Promise.all([
+  const dayStart = new Date(`${date}T00:00:00${CLINIC_UTC_OFFSET}`).toISOString();
+  const dayEnd = new Date(`${date}T23:59:59${CLINIC_UTC_OFFSET}`).toISOString();
+  const [windows, blocks, taken, busy] = await Promise.all([
     listWeeklyWindows(slug),
     listBlocks(slug),
     takenSlots(slug, excludeId),
+    calendarBusy(slug, dayStart, dayEnd).catch(() => null),
   ]);
   const takenSet = new Set(taken.filter((entry) => entry.startsWith(`${date} `)));
   const blocked = new Set(blockedSlotsFor(blocks, date));
+  const externalBusy = new Set(busy ? busySlotsForDate(busy, date) : []);
   return baseSlotsFor(windows, date).filter(
-    (slot) => !blocked.has(slot) && !takenSet.has(`${date} ${slot}`),
+    (slot) => !blocked.has(slot) && !externalBusy.has(slot) && !takenSet.has(`${date} ${slot}`),
   );
 }
